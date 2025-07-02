@@ -1,5 +1,13 @@
 // lib/models/city_live_info.dart
 
+// Define a simple Value wrapper for nullable fields in copyWith
+// This allows us to distinguish between not providing a value
+// and explicitly providing null as a value.
+class Value<T> {
+  final T value;
+  const Value(this.value);
+}
+
 class CityLiveInfo {
   final DateTime currentTimeUtc;
   final int timezoneOffsetSeconds;
@@ -31,36 +39,39 @@ class CityLiveInfo {
 
   String get formattedLocalTime {
     final localTime = currentTimeUtc.toUtc().add(Duration(seconds: timezoneOffsetSeconds));
-    return '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}:${localTime.second.toString().padLeft(2, '0')}';
+    // FIX: Removed seconds and 'Time:' prefix (from previous iteration)
+    return '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
   }
 
   CityLiveInfo copyWith({
     DateTime? currentTimeUtc,
     int? timezoneOffsetSeconds,
-    double? temperatureCelsius,
-    double? feelsLike,
-    int? humidity,
-    double? windSpeed,
-    String? windDirection,
-    String? condition,
-    String? description,
-    String? weatherIconCode,
+    // FIX: Use Value<double?> for nullable fields to implement sentinel pattern
+    Value<double?>? temperatureCelsius,
+    Value<double?>? feelsLike,
+    Value<int?>? humidity,
+    Value<double?>? windSpeed,
+    Value<String?>? windDirection,
+    Value<String?>? condition,
+    Value<String?>? description,
+    Value<String?>? weatherIconCode,
     bool? isLoading,
-    String? error,
+    Value<String?>? error, // Apply sentinel to error as well
   }) {
     return CityLiveInfo(
       currentTimeUtc: currentTimeUtc ?? this.currentTimeUtc,
       timezoneOffsetSeconds: timezoneOffsetSeconds ?? this.timezoneOffsetSeconds,
-      temperatureCelsius: temperatureCelsius,
-      feelsLike: feelsLike,
-      humidity: humidity,
-      windSpeed: windSpeed,
-      windDirection: windDirection,
-      condition: condition,
-      description: description,
-      weatherIconCode: weatherIconCode,
+      // FIX: Apply sentinel logic: if Value is provided, use its value. Otherwise, keep existing.
+      temperatureCelsius: temperatureCelsius != null ? temperatureCelsius.value : this.temperatureCelsius,
+      feelsLike: feelsLike != null ? feelsLike.value : this.feelsLike,
+      humidity: humidity != null ? humidity.value : this.humidity,
+      windSpeed: windSpeed != null ? windSpeed.value : this.windSpeed,
+      windDirection: windDirection != null ? windDirection.value : this.windDirection,
+      condition: condition != null ? condition.value : this.condition,
+      description: description != null ? description.value : this.description,
+      weatherIconCode: weatherIconCode != null ? weatherIconCode.value : this.weatherIconCode,
       isLoading: isLoading ?? this.isLoading,
-      error: error,
+      error: error != null ? error.value : this.error,
     );
   }
 

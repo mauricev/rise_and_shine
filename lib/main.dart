@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:rise_and_shine/providers/app_managers_provider.dart'; // Updated import path
-import 'package:rise_and_shine/screens/home_screen.dart'; // Updated import path
+import 'package:rise_and_shine/screens/weather_screen.dart'; // Updated import path
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,7 +36,7 @@ class MyApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const HomeScreen(), // Using HomeScreen as the initial screen
+        home: const WeatherScreen(), // Using HomeScreen as the initial screen
       ),
     );
   }

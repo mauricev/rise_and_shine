@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:rise_and_shine/managers/city_list_manager.dart';
+import 'package:rise_and_shine/services/search_cities_service.dart';
 
 class AppManagersProvider extends StatefulWidget {
   final Widget child;
@@ -24,11 +25,14 @@ class AppManagersProvider extends StatefulWidget {
 
 class AppManagersProviderState extends State<AppManagersProvider> {
   late final CityListManager cityListManager;
+  // Removed: late final SearchCitiesService searchCitiesService; // No longer provided directly
 
   @override
   void initState() {
     super.initState();
-    cityListManager = CityListManager();
+    // Instantiate SearchCitiesService and pass it to CityListManager
+    final SearchCitiesService searchCitiesService = SearchCitiesService();
+    cityListManager = CityListManager(searchCitiesService: searchCitiesService);
   }
 
   @override
@@ -39,14 +43,13 @@ class AppManagersProviderState extends State<AppManagersProvider> {
 
   @override
   Widget build(BuildContext context) {
-    return _AppManagersInheritedWidget( // Changed to _AppManagersInheritedWidget
+    return _AppManagersInheritedWidget(
       cityListManager: cityListManager,
       child: widget.child,
     );
   }
 }
 
-// Changed from InheritedNotifier to InheritedWidget
 class _AppManagersInheritedWidget extends InheritedWidget {
   const _AppManagersInheritedWidget({
     required this.cityListManager,
@@ -55,8 +58,7 @@ class _AppManagersInheritedWidget extends InheritedWidget {
 
   final CityListManager cityListManager;
 
-  // Updated _getManager to use InheritedWidget pattern
-  static T? _getManager<T extends ChangeNotifier>(BuildContext context) {
+  static T? _getManager<T extends Object>(BuildContext context) {
     final _AppManagersInheritedWidget? inherited =
     context.dependOnInheritedWidgetOfExactType<_AppManagersInheritedWidget>();
 
@@ -71,14 +73,11 @@ class _AppManagersInheritedWidget extends InheritedWidget {
 
   @override
   bool updateShouldNotify(_AppManagersInheritedWidget oldWidget) {
-    // This InheritedWidget itself only needs to notify if the manager instances change.
-    // Since our managers (cityListManager) are 'late final' and created once in initState,
-    // they will not change during the widget's lifetime.
-    // UI widgets will listen directly to the managers using ListenableBuilder.
     return false;
   }
 }
 
 extension BuildContextManagerExtensions on BuildContext {
   CityListManager get cityListManager => _AppManagersInheritedWidget._getManager<CityListManager>(this)!;
+// Removed: SearchCitiesService get searchCitiesService => _AppManagersInheritedWidget._getManager<SearchCitiesService>(this)!; // No longer provided directly
 }
