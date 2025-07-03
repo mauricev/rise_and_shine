@@ -7,8 +7,9 @@ import 'package:rise_and_shine/models/city_display_data.dart';
 import 'package:rise_and_shine/models/city_live_info.dart';
 import 'package:rise_and_shine/providers/app_managers_provider.dart';
 import 'package:rise_and_shine/screens/city_selection_screen.dart';
-import 'package:rise_and_shine/consts/consts_ui.dart'; // Import the constants file
-import 'dart:async'; // Import for Timer
+import 'package:rise_and_shine/consts/consts_ui.dart';
+import 'dart:async';
+import 'package:logger/logger.dart';
 
 class WeatherScreen extends StatefulWidget {
   const WeatherScreen({super.key});
@@ -18,39 +19,82 @@ class WeatherScreen extends StatefulWidget {
 }
 
 class _WeatherScreenState extends State<WeatherScreen> {
-  // Local state to manage the "Added" button's momentary display
   bool _showAddedConfirmation = false;
   Timer? _addedConfirmationTimer;
+
+  late CityListManager _cityListManager;
+  bool _didInitialFetch = false;
+
+  final Logger _logger = Logger(
+    printer: PrettyPrinter(
+      methodCount: 0,
+      errorMethodCount: 5,
+      lineLength: 120,
+      colors: true,
+      printEmojis: true,
+      printTime: true,
+    ),
+  );
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.cityListManager.fetchAvailableCities();
-    });
+    _logger.d('WeatherScreen: initState called.');
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _cityListManager = context.cityListManager;
+    _logger.d('WeatherScreen: didChangeDependencies called. Manager initialized.');
+
+    if (!_didInitialFetch) {
+      _initializeManagerAndFetchCities(_cityListManager);
+      _didInitialFetch = true;
+    } else {
+      _logger.d('WeatherScreen: Initial fetch already triggered, skipping.');
+    }
+  }
+
+  Future<void> _initializeManagerAndFetchCities(CityListManager manager) async {
+    _logger.d('WeatherScreen: _initializeManagerAndFetchCities started.');
+    try {
+      _logger.d('WeatherScreen: Awaiting manager.initialized...');
+      await manager.initialized;
+      _logger.d('WeatherScreen: manager.initialized completed.');
+
+      if (mounted) {
+        _logger.d('WeatherScreen: Widget is mounted. Calling manager.fetchAvailableCities()...');
+        await manager.fetchAvailableCities();
+        _logger.d('WeatherScreen: manager.fetchAvailableCities() completed.');
+      } else {
+        _logger.d('WeatherScreen: Widget NOT mounted after manager initialization. Skipping fetch.');
+      }
+    } catch (e) {
+      _logger.e('WeatherScreen: Error initializing manager or fetching cities: $e');
+    }
   }
 
   @override
   void dispose() {
-    _addedConfirmationTimer?.cancel(); // Cancel timer to prevent memory leaks
+    _logger.d('WeatherScreen: dispose called.');
+    _addedConfirmationTimer?.cancel();
     super.dispose();
   }
 
-  // Method to handle adding a city to the saved list
   void _addCityToSavedList(City city) {
-    final CityListManager manager = context.cityListManager;
-    manager.addCityToSavedList(city); // Add the city via the manager
+    _logger.d('WeatherScreen: _addCityToSavedList called for ${city.name}.');
+    _cityListManager.addCityToSavedList(city);
 
     setState(() {
-      _showAddedConfirmation = true; // Show "Added" text
+      _showAddedConfirmation = true;
     });
 
-    // Start a timer to hide the "Added" text after a brief moment
-    _addedConfirmationTimer?.cancel(); // Cancel any existing timer
+    _addedConfirmationTimer?.cancel();
     _addedConfirmationTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() {
-          _showAddedConfirmation = false; // Hide "Added" text
+          _showAddedConfirmation = false;
         });
       }
     });
@@ -58,7 +102,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final CityListManager manager = context.cityListManager;
+    _logger.d('WeatherScreen: build called.');
+    final CityListManager manager = _cityListManager;
 
     return Scaffold(
       appBar: AppBar(
@@ -69,26 +114,42 @@ class _WeatherScreenState extends State<WeatherScreen> {
       body: ListenableBuilder(
         listenable: manager,
         builder: (BuildContext context, Widget? child) {
+          _logger.d('WeatherScreen: ListenableBuilder rebuild. isLoadingCities: ${manager.isLoadingCities}, selectedCity: ${manager.selectedCity?.name ?? 'null'}, allCitiesDisplayData.isEmpty: ${manager.allCitiesDisplayData.isEmpty}');
+
           final City? selectedCity = manager.selectedCity;
           final bool isLoadingCities = manager.isLoadingCities;
           final String? citiesFetchError = manager.citiesFetchError;
 
-          if (isLoadingCities) {
+          if (isLoadingCities && selectedCity == null && manager.allCitiesDisplayData.isEmpty) {
+            _logger.d('WeatherScreen: ListenableBuilder: Showing initial loading state (Manager loading with no data).');
             return _buildLoadingCitiesState();
           } else if (citiesFetchError != null) {
+            _logger.d('WeatherScreen: ListenableBuilder: Showing cities fetch error state.');
             return _buildErrorFetchingCitiesState(citiesFetchError, manager);
           } else if (selectedCity == null) {
+            _logger.d('WeatherScreen: ListenableBuilder: No city selected, showing selection prompt.');
             return _buildNoCitySelectedState(context);
           }
 
+          _logger.d('WeatherScreen: ListenableBuilder: Selected city is ${selectedCity.name}. Proceeding to StreamBuilder.');
           return StreamBuilder<List<CityDisplayData>>(
             stream: manager.citiesDataStream,
             builder: (BuildContext context, AsyncSnapshot<List<CityDisplayData>> snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+              _logger.d('WeatherScreen: StreamBuilder rebuild. ConnectionState: ${snapshot.connectionState}, hasData: ${snapshot.hasData}, hasError: ${snapshot.hasError}');
+
+              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData && manager.isLoadingCities) {
+                _logger.d('WeatherScreen: StreamBuilder: ConnectionState.waiting and no data, manager still loading. Showing progress indicator.');
                 return const Center(child: CircularProgressIndicator());
               } else if (snapshot.hasError) {
+                _logger.e('WeatherScreen: StreamBuilder: Snapshot has error: ${snapshot.error}');
                 return _buildWeatherErrorState(selectedCity, snapshot.error);
               } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                _logger.d('WeatherScreen: StreamBuilder: No data or empty data. Checking further conditions.');
+                if (!manager.isLoadingCities && manager.selectedCity == null) {
+                  _logger.d('WeatherScreen: StreamBuilder: Manager not loading, no selected city. Showing selection prompt.');
+                  return _buildNoCitySelectedState(context);
+                }
+                _logger.d('WeatherScreen: StreamBuilder: Showing no city data available state.');
                 return _buildNoCityDataAvailableState();
               }
 
@@ -96,9 +157,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
                   .firstWhereOrNull((CityDisplayData cityDisplay) => cityDisplay.city == selectedCity);
 
               if (selectedCityDisplayData == null) {
+                _logger.d('WeatherScreen: StreamBuilder: Selected city data not found in snapshot.');
                 return _buildSelectedCityNotFoundState(selectedCity);
               }
-
+              _logger.d('WeatherScreen: StreamBuilder: Displaying weather for ${selectedCityDisplayData.city.name}.');
               return _buildWeatherDisplay(selectedCityDisplayData, context);
             },
           );
@@ -114,7 +176,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
         children: [
           CircularProgressIndicator(),
           SizedBox(height: 16),
-          Text(kLoadingCities), // Use constant
+          Text(kLoadingCities),
         ],
       ),
     );
@@ -130,14 +192,14 @@ class _WeatherScreenState extends State<WeatherScreen> {
             const Icon(Icons.error_outline, color: Colors.red, size: 50),
             const SizedBox(height: 10),
             Text(
-              '$kErrorFetchingCities $error', // Use constant
+              '$kErrorFetchingCities $error',
               style: const TextStyle(color: Colors.red, fontSize: 16),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () => manager.fetchAvailableCities(),
-              child: const Text(kRetryFetchCities), // Use constant
+              child: const Text(kRetryFetchCities),
             ),
           ],
         ),
@@ -151,7 +213,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Text(
-            kNoCitySelected, // Use constant
+            kNoCitySelected,
             style: TextStyle(fontSize: 18, color: Colors.grey),
           ),
           const SizedBox(height: 20),
@@ -161,7 +223,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 MaterialPageRoute<void>(builder: (BuildContext context) => const CitySelectionScreen()),
               );
             },
-            child: const Text(kSelectACity), // Use constant
+            child: const Text(kSelectACity),
           ),
         ],
       ),
@@ -178,7 +240,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
             const Icon(Icons.error_outline, color: Colors.red, size: 50),
             const SizedBox(height: 10),
             Text(
-              '$kErrorLoadingCities ${selectedCity.name}: $error', // Use constant
+              '$kErrorLoadingCities ${selectedCity.name}: $error',
               style: const TextStyle(color: Colors.red, fontSize: 16),
               textAlign: TextAlign.center,
             ),
@@ -191,7 +253,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
   Widget _buildNoCityDataAvailableState() {
     return const Center(
       child: Text(
-        kNoCityDataAvailableAfterFetch, // Use constant
+        kNoCityDataAvailableAfterFetch,
         textAlign: TextAlign.center,
         style: TextStyle(fontSize: 16, color: Colors.grey),
       ),
@@ -201,40 +263,39 @@ class _WeatherScreenState extends State<WeatherScreen> {
   Widget _buildSelectedCityNotFoundState(City selectedCity) {
     return Center(
       child: Text(
-        '$kDataNotFoundForCity ${selectedCity.name}. $kPleaseSelectAnotherCity', // Use constants
+        '$kDataNotFoundForCity ${selectedCity.name}. $kPleaseSelectAnotherCity',
         textAlign: TextAlign.center,
         style: const TextStyle(fontSize: 16, color: Colors.grey),
       ),
     );
   }
 
-  // New private helper function to consolidate weather detail texts
   Widget _buildWeatherDetailsText(CityLiveInfo liveInfo) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch, // FIX: Ensure this column stretches
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          '$kFeelsLike ${liveInfo.feelsLike!.toStringAsFixed(1)}°C', // Use constant
+          '$kFeelsLike ${liveInfo.feelsLike!.toStringAsFixed(1)}°C',
           style: const TextStyle(fontSize: 18, color: Colors.blueGrey),
-          textAlign: TextAlign.center, // Center text within the stretched column
+          textAlign: TextAlign.center,
         ),
         Text(
-          '$kHumidity ${liveInfo.humidity!}%', // Use constant
+          '$kHumidity ${liveInfo.humidity!}%',
           style: const TextStyle(fontSize: 18, color: Colors.blueGrey),
-          textAlign: TextAlign.center, // Center text within the stretched column
+          textAlign: TextAlign.center,
         ),
         Text(
-          '$kWind ${liveInfo.windSpeed!.toStringAsFixed(1)} m/s ${liveInfo.windDirection}', // Use constant
+          '$kWind ${liveInfo.windSpeed!.toStringAsFixed(1)} m/s ${liveInfo.windDirection}',
           style: const TextStyle(fontSize: 18, color: Colors.blueGrey),
-          textAlign: TextAlign.center, // Center text within the stretched column
+          textAlign: TextAlign.center,
         ),
         Text(
-          '$kCondition ${liveInfo.condition ?? 'N/A'}', // Use constant
+          '$kCondition ${liveInfo.condition ?? 'N/A'}',
           style: const TextStyle(fontSize: 18, color: Colors.blueGrey),
-          textAlign: TextAlign.center, // Center text within the stretched column
+          textAlign: TextAlign.center,
         ),
         Text(
-          '$kDescription ${liveInfo.description ?? 'N/A'}', // Use constant
+          '$kDescription ${liveInfo.description ?? 'N/A'}',
           style: const TextStyle(fontSize: 16, color: Colors.grey),
           textAlign: TextAlign.center,
         ),
@@ -243,12 +304,12 @@ class _WeatherScreenState extends State<WeatherScreen> {
   }
 
   Widget _buildWeatherDisplay(CityDisplayData selectedCityDisplayData, BuildContext context) {
-    final CityListManager manager = context.cityListManager; // Access manager here for button logic
+    final CityListManager manager = _cityListManager;
     final City selectedCity = selectedCityDisplayData.city;
-    final bool isCityCurrentlySaved = manager.isCitySaved(selectedCity);
+    // FIX: Removed the unused local variable 'isCityCurrentlySaved'
+    // final bool isCityCurrentlySaved = manager.isCitySaved(selectedCity);
 
-    // Define a consistent size for the button/text to prevent layout shifts
-    const Size buttonSize = Size(80, 40); // Approximate size of the TextButton or "Added" text
+    const Size buttonSize = Size(80, 40);
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -262,8 +323,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
               padding: const EdgeInsets.all(24.0),
               child: Stack(
                 children: [
-                  Column( // This is the main content column
-                    crossAxisAlignment: CrossAxisAlignment.stretch, // FIX: Ensure this column stretches
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
                         selectedCityDisplayData.city.name,
@@ -293,7 +354,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                             const Icon(Icons.warning, color: Colors.orange, size: 40),
                             const SizedBox(height: 8),
                             Text(
-                              '$kWeatherError ${selectedCityDisplayData.liveInfo.error!}', // Use constant
+                              '$kWeatherError ${selectedCityDisplayData.liveInfo.error!}',
                               style: const TextStyle(color: Colors.red, fontSize: 16),
                               textAlign: TextAlign.center,
                             ),
@@ -319,17 +380,15 @@ class _WeatherScreenState extends State<WeatherScreen> {
                             ],
                           )
                         else
-                          const Text(kNoWeatherDataAvailable, style: TextStyle(fontSize: 16, color: Colors.grey)), // Use constant
+                          const Text(kNoWeatherDataAvailable, style: TextStyle(fontSize: 16, color: Colors.grey)),
                     ],
                   ),
-                  // Positioned Add button inside the Card with Container for consistent sizing
                   Positioned(
                     top: 0,
                     right: 0,
                     child: ListenableBuilder(
-                      listenable: manager, // Listen to manager for saved state changes
+                      listenable: manager,
                       builder: (BuildContext context, Widget? child) {
-                        // Re-check isCitySaved here to react to manager's state changes
                         final bool isCityCurrentlySavedForButton = manager.isCitySaved(selectedCity);
 
                         if (!isCityCurrentlySavedForButton && !_showAddedConfirmation) {
@@ -341,13 +400,13 @@ class _WeatherScreenState extends State<WeatherScreen> {
                               child: TextButton(
                                 onPressed: () => _addCityToSavedList(selectedCity),
                                 style: TextButton.styleFrom(
-                                  foregroundColor: Colors.blue.shade700, // Adjusted color for visibility on card
+                                  foregroundColor: Colors.blue.shade700,
                                   textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  minimumSize: Size.zero, // Remove default padding
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap, // Shrink tap area
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 ),
-                                child: const Text(kAddButton), // Use constant
+                                child: const Text(kAddButton),
                               ),
                             ),
                           );
@@ -360,9 +419,9 @@ class _WeatherScreenState extends State<WeatherScreen> {
                               child: Padding(
                                 padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
                                 child: Text(
-                                  kAddedConfirmation, // Use constant
+                                  kAddedConfirmation,
                                   style: TextStyle(
-                                    color: Colors.green, // Indicate success
+                                    color: Colors.green,
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -371,7 +430,6 @@ class _WeatherScreenState extends State<WeatherScreen> {
                             ),
                           );
                         }
-                        // Return a transparent Container with fixed size to maintain layout
                         return SizedBox(
                           width: buttonSize.width,
                           height: buttonSize.height,
@@ -399,7 +457,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 side: BorderSide(color: Colors.blue.shade300),
               ),
-              child: const Text(kCitiesButton, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), // Use constant
+              child: const Text(kCitiesButton, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
           ),
         ],

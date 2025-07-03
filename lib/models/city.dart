@@ -1,34 +1,74 @@
 // lib/models/city.dart
 
-import 'package:uuid/uuid.dart'; // Required for UUID generation
+import 'dart:convert'; // For JSON encoding/decoding
 
 class City {
-  final String id;
   final String name;
   final String country;
-  final String? state; // State can be nullable for countries without states/provinces
+  final String? state;
   final double latitude;
   final double longitude;
-  final int timezoneOffsetSeconds; // Offset from UTC in seconds
+  final int timezoneOffsetSeconds;
 
   City({
-    String? id, // Optional for new cities, will be generated if null
     required this.name,
     required this.country,
     this.state,
     required this.latitude,
     required this.longitude,
     required this.timezoneOffsetSeconds,
-  }) : id = id ?? const Uuid().v4(); // Generate UUID if not provided
+  });
+
+  // NEW: Factory constructor to create a City object from a JSON map
+  factory City.fromJson(Map<String, dynamic> json) {
+    return City(
+      name: json['name'] as String,
+      country: json['country'] as String,
+      state: json['state'] as String?,
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+      timezoneOffsetSeconds: json['timezoneOffsetSeconds'] as int,
+    );
+  }
+
+  // NEW: Method to convert a City object to a JSON map
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'country': country,
+      'state': state,
+      'latitude': latitude,
+      'longitude': longitude,
+      'timezoneOffsetSeconds': timezoneOffsetSeconds,
+    };
+  }
+
+  // Optional: For easier debugging and logging
+  @override
+  String toString() {
+    return 'City(name: $name, country: $country, state: $state, lat: $latitude, lon: $longitude, timezoneOffset: $timezoneOffsetSeconds)';
+  }
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
+
     return other is City &&
         runtimeType == other.runtimeType &&
-        id == other.id; // Compare by ID for unique identification
+        name == other.name &&
+        country == other.country &&
+        state == other.state &&
+        latitude == other.latitude &&
+        longitude == other.longitude &&
+        timezoneOffsetSeconds == other.timezoneOffsetSeconds;
   }
 
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode =>
+      name.hashCode ^
+      country.hashCode ^
+      state.hashCode ^
+      latitude.hashCode ^
+      longitude.hashCode ^
+      timezoneOffsetSeconds.hashCode;
 }

@@ -8,9 +8,13 @@ import 'package:rise_and_shine/models/city_display_data.dart';
 import 'package:rise_and_shine/models/city_live_info.dart';
 import '../services/open_weather_service.dart';
 import '../services/search_cities_service.dart';
-import 'package:logger/logger.dart'; // Import the logger plugin
+import 'package:logger/logger.dart';
+import 'package:hive_ce_flutter/adapters.dart'; // Import Hive
 
 class CityListManager extends ChangeNotifier {
+  static const String _citiesBoxName = 'savedCitiesBox';
+  late Box _citiesBox;
+
   final OpenWeatherService _weatherService;
   final SearchCitiesService _searchCitiesService;
 
@@ -20,6 +24,7 @@ class CityListManager extends ChangeNotifier {
 
   City? _selectedCity;
 
+  // FIX: Corrected stream type from List<List<CityDisplayData>> to List<CityDisplayData>
   final StreamController<List<CityDisplayData>> _citiesDataController =
   StreamController<List<CityDisplayData>>.broadcast();
 
@@ -42,7 +47,6 @@ class CityListManager extends ChangeNotifier {
   Timer? _timeUpdateTimer;
   Timer? _weatherUpdateTimer;
 
-  // Instantiate the logger
   final Logger _logger = Logger(
     printer: PrettyPrinter(
       methodCount: 0,
@@ -54,15 +58,24 @@ class CityListManager extends ChangeNotifier {
     ),
   );
 
+  final Completer<void> _initCompleter = Completer<void>();
+  Future<void> get initialized => _initCompleter.future;
+
   CityListManager({
     OpenWeatherService? weatherService,
     required SearchCitiesService searchCitiesService,
   })  : _weatherService = weatherService ?? OpenWeatherService(),
         _searchCitiesService = searchCitiesService {
-    _initializeManager();
+    _initializeManager().then((_) {
+      _initCompleter.complete();
+      _logger.d('CityListManager: Initialization completed successfully.');
+    }).catchError((e) {
+      _initCompleter.completeError(e);
+      _logger.e('CityListManager: Initialization failed: $e', error: e);
+    });
   }
 
-  void _initializeManager() {
+  Future<void> _initializeManager() async {
     _citiesData = [];
     _selectedCity = null;
     _isLoadingCities = false;
@@ -70,56 +83,108 @@ class CityListManager extends ChangeNotifier {
     _isSearchingCities = false;
     _searchCitiesError = null;
 
-    _citiesDataController.add(UnmodifiableListView(_citiesData));
-    notifyListeners();
+    try {
+      if (!Hive.isBoxOpen(_citiesBoxName)) {
+        _citiesBox = await Hive.openBox(_citiesBoxName);
+        _logger.d('CityListManager: Hive box "$_citiesBoxName" opened.');
+      } else {
+        _citiesBox = Hive.box(_citiesBoxName);
+        _logger.d('CityListManager: Hive box "$_citiesBoxName" already open.');
+      }
+
+      _loadCitiesFromHive();
+
+      _citiesDataController.add(UnmodifiableListView(_citiesData));
+      if (hasListeners) notifyListeners(); // Check hasListeners
+    } catch (e) {
+      _logger.e('CityListManager: Error initializing Hive or loading cities: $e', error: e);
+      _citiesFetchError = 'Failed to initialize app data: ${e.toString()}';
+      if (hasListeners) notifyListeners(); // Check hasListeners
+      rethrow;
+    }
+  }
+
+  void _loadCitiesFromHive() {
+    _citiesData = [];
+    if (kDebugMode) {
+      _logger.d('CityListManager: Loading cities from Hive.');
+    }
+    final List<dynamic>? savedJsonList = _citiesBox.get('savedCities');
+
+    if (savedJsonList != null) {
+      if (kDebugMode) {
+        _logger.d('CityListManager: Found ${savedJsonList.length} cities in Hive.');
+      }
+      for (final dynamic jsonItem in savedJsonList) {
+        try {
+          final Map<String, dynamic> cityMap = (jsonItem as Map).cast<String, dynamic>();
+          final CityDisplayData cityDisplayData = CityDisplayData.fromJson(cityMap);
+          _citiesData.add(cityDisplayData);
+        } catch (e) {
+          _logger.e('CityListManager: Error parsing saved city from Hive: $e, data: $jsonItem', error: e);
+        }
+      }
+      if (_citiesData.isNotEmpty) {
+        _selectedCity = _citiesData.first.city;
+        _logger.d('CityListManager: Selected first loaded city: ${_selectedCity!.name}');
+      }
+    } else {
+      _logger.d('CityListManager: No saved cities found in Hive.');
+    }
+  }
+
+  Future<void> _saveCitiesToHive() async {
+    if (kDebugMode) {
+      _logger.d('CityListManager: Saving cities to Hive.');
+    }
+    final List<Map<String, dynamic>> citiesToSave = _citiesData
+        .where((data) => data.isSaved)
+        .map((data) => data.toJson())
+        .toList();
+
+    try {
+      await _citiesBox.put('savedCities', citiesToSave);
+      _logger.d('CityListManager: Successfully saved ${citiesToSave.length} cities to Hive.');
+    } catch (e) {
+      _logger.e('CityListManager: Error saving cities to Hive: $e', error: e);
+    }
   }
 
   Future<void> fetchAvailableCities() async {
     if (kDebugMode) {
-      _logger.d('CityListManager: fetchAvailableCities called.');
+      _logger.d('CityListManager: fetchAvailableCities called. (After initial Hive load)');
     }
-    if (_isLoadingCities) return;
+    if (_isLoadingCities) {
+      _logger.d('CityListManager: fetchAvailableCities: Already loading, returning.');
+      return;
+    }
 
     _isLoadingCities = true;
     _citiesFetchError = null;
-    notifyListeners();
+    if (hasListeners) notifyListeners();
 
     try {
-      _isLoadingCities = false;
-      _citiesFetchError = null;
-
-      if (_selectedCity != null) {
-        if (kDebugMode) {
-          _logger.d('CityListManager: Selected city exists, fetching weather for ${_selectedCity!.name}.');
-        }
-        await _fetchAndUpdateSingleCity(_selectedCity!);
-        _startTimers();
-      } else if (_citiesData.isNotEmpty) {
-        if (kDebugMode) {
-          _logger.d('CityListManager: No city selected, but saved cities exist. Selecting first saved city.');
-        }
-        _selectedCity = _citiesData.first.city;
+      if (_selectedCity != null || _citiesData.isNotEmpty) {
+        _logger.d('CityListManager: fetchAvailableCities: Cities available, starting timers.');
         _startTimers();
       } else {
-        if (kDebugMode) {
-          _logger.d('CityListManager: No selected city and no saved cities. Stopping timers.');
-        }
+        _logger.d('CityListManager: fetchAvailableCities: No selected city and no saved cities. Not starting timers.');
         _timeUpdateTimer?.cancel();
         _weatherUpdateTimer?.cancel();
       }
 
+      _isLoadingCities = false;
       _citiesDataController.add(UnmodifiableListView(_citiesData));
-      notifyListeners();
+      if (hasListeners) notifyListeners();
+      _logger.d('CityListManager: fetchAvailableCities: Completed.');
     } catch (e) {
-      if (kDebugMode) {
-        _logger.e('CityListManager: Error in fetchAvailableCities: $e', error: e);
-      }
+      _logger.e('CityListManager: Error in fetchAvailableCities: $e', error: e);
       _isLoadingCities = false;
       _citiesFetchError = e.toString();
       _citiesData = [];
       _selectedCity = null;
       _citiesDataController.add(UnmodifiableListView(_citiesData));
-      notifyListeners();
+      if (hasListeners) notifyListeners();
     }
   }
 
@@ -130,13 +195,13 @@ class CityListManager extends ChangeNotifier {
     if (query.isEmpty) {
       _isSearchingCities = false;
       _searchCitiesError = null;
-      notifyListeners();
+      if (hasListeners) notifyListeners();
       return [];
     }
 
     _isSearchingCities = true;
     _searchCitiesError = null;
-    notifyListeners();
+    if (hasListeners) notifyListeners();
 
     try {
       final List<City> results = await _searchCitiesService.searchCities(query);
@@ -144,7 +209,7 @@ class CityListManager extends ChangeNotifier {
         _logger.d('CityListManager: searchCities results count: ${results.length}');
       }
       _isSearchingCities = false;
-      notifyListeners();
+      if (hasListeners) notifyListeners();
       return results;
     } catch (e) {
       if (kDebugMode) {
@@ -152,7 +217,7 @@ class CityListManager extends ChangeNotifier {
       }
       _isSearchingCities = false;
       _searchCitiesError = e.toString();
-      notifyListeners();
+      if (hasListeners) notifyListeners();
       return [];
     }
   }
@@ -184,14 +249,15 @@ class CityListManager extends ChangeNotifier {
       _selectedCity = city;
       _citiesDataController.add(UnmodifiableListView(_citiesData));
       _startTimers();
-      notifyListeners();
+      if (hasListeners) notifyListeners();
       _fetchAndUpdateSingleCity(city);
     } else {
       if (kDebugMode) {
         _logger.d('CityListManager: City ${city.name} already in managed list, setting as selected.');
       }
       _selectedCity = city;
-      notifyListeners();
+      if (hasListeners) notifyListeners();
+      _fetchAndUpdateSingleCity(city);
     }
   }
 
@@ -207,10 +273,11 @@ class CityListManager extends ChangeNotifier {
       final CityDisplayData updatedData = _citiesData[index].copyWith(isSaved: true);
       _citiesData = List<CityDisplayData>.of(_citiesData)..setAll(index, [updatedData]);
       _citiesDataController.add(UnmodifiableListView(_citiesData));
-      notifyListeners();
+      if (hasListeners) notifyListeners();
+      _saveCitiesToHive();
     } else {
       if (kDebugMode) {
-        _logger.d('CityListManager: ${city.name} not found or already saved. No action taken.');
+        _logger.d('CityListManager: ${city.name} already saved or not found in current managed list. No action taken.');
       }
     }
   }
@@ -229,7 +296,7 @@ class CityListManager extends ChangeNotifier {
     }
     _cleanUpUnsavedUnselectedCity();
     _selectedCity = null;
-    notifyListeners();
+    if (hasListeners) notifyListeners();
     _timeUpdateTimer?.cancel();
     _weatherUpdateTimer?.cancel();
     _citiesDataController.add(UnmodifiableListView(_citiesData));
@@ -241,6 +308,7 @@ class CityListManager extends ChangeNotifier {
     }
     final List<CityDisplayData> currentCities = List<CityDisplayData>.of(_citiesData);
     final int initialCount = currentCities.length;
+    // Remove cities that are NOT saved and are NOT the currently selected city
     currentCities.removeWhere((CityDisplayData data) => !data.isSaved && data.city != _selectedCity);
     if (currentCities.length != initialCount) {
       if (kDebugMode) {
@@ -248,6 +316,7 @@ class CityListManager extends ChangeNotifier {
       }
       _citiesData = List<CityDisplayData>.unmodifiable(currentCities);
       _citiesDataController.add(_citiesData);
+      _saveCitiesToHive();
     } else {
       if (kDebugMode) {
         _logger.d('CityListManager: No unsaved, unselected cities to remove.');
@@ -265,9 +334,7 @@ class CityListManager extends ChangeNotifier {
     if (_citiesData.isNotEmpty) {
       _fetchWeatherForAllCities();
     } else {
-      if (kDebugMode) {
-        _logger.d('CityListManager: No cities in _citiesData, not starting weather fetch timer.');
-      }
+      _logger.d('CityListManager: _citiesData is empty, skipping initial weather fetch.');
     }
 
     _timeUpdateTimer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
@@ -281,13 +348,12 @@ class CityListManager extends ChangeNotifier {
 
   void _updateTimeForAllCities() {
     if (_citiesData.isEmpty) return;
+    _logger.d('CityListManager: _updateTimeForAllCities called.');
 
     final DateTime nowUtc = DateTime.now().toUtc();
     final List<CityDisplayData> updatedList = _citiesData.map((CityDisplayData cityData) {
-      // Use Value() wrapper for nullable fields when updating time, to preserve weather data
       final CityLiveInfo newLiveInfo = cityData.liveInfo.copyWith(
         currentTimeUtc: nowUtc,
-        // Explicitly pass existing weather data using Value() to prevent nulling out
         temperatureCelsius: Value(cityData.liveInfo.temperatureCelsius),
         feelsLike: Value(cityData.liveInfo.feelsLike),
         humidity: Value(cityData.liveInfo.humidity),
@@ -297,26 +363,29 @@ class CityListManager extends ChangeNotifier {
         description: Value(cityData.liveInfo.description),
         weatherIconCode: Value(cityData.liveInfo.weatherIconCode),
         error: Value(cityData.liveInfo.error),
-        isLoading: cityData.liveInfo.isLoading, // Keep existing isLoading state
+        isLoading: cityData.liveInfo.isLoading,
       );
       return cityData.copyWith(liveInfo: newLiveInfo);
     }).toList();
 
     _citiesData = List<CityDisplayData>.unmodifiable(updatedList);
-    _citiesDataController.add(_citiesData);
+    _citiesDataController.add(UnmodifiableListView(_citiesData));
   }
 
   Future<void> _fetchWeatherForAllCities() async {
     if (kDebugMode) {
       _logger.d('CityListManager: _fetchWeatherForAllCities called. Cities count: ${_citiesData.length}');
     }
-    if (_citiesData.isEmpty) return;
+    if (_citiesData.isEmpty) {
+      _logger.d('CityListManager: _citiesData is empty, skipping weather fetch for all cities.');
+      return;
+    }
 
     final List<Future<void>> fetchFutures = [];
 
     _citiesData = _citiesData.map((CityDisplayData cityData) {
       return cityData.copyWith(
-        liveInfo: cityData.liveInfo.copyWith(isLoading: true, error: Value(null)), // Use Value(null) to explicitly clear error
+        liveInfo: cityData.liveInfo.copyWith(isLoading: true, error: Value(null)),
       );
     }).toList();
     _citiesDataController.add(UnmodifiableListView(_citiesData));
@@ -328,6 +397,7 @@ class CityListManager extends ChangeNotifier {
 
     await Future.wait(fetchFutures);
     _citiesDataController.add(UnmodifiableListView(_citiesData));
+    _logger.d('CityListManager: _fetchWeatherForAllCities: All fetches completed.');
   }
 
   Future<void> _fetchAndUpdateSingleCity(City city) async {
@@ -352,14 +422,13 @@ class CityListManager extends ChangeNotifier {
         description: apiResponse['description'] as String,
         weatherIconCode: apiResponse['weatherIconCode'] as String,
         isLoading: false,
-        error: null, // No error on success
+        error: null,
       );
 
       final int index = _citiesData.indexWhere((CityDisplayData c) => c.city == city);
       if (index != -1) {
         final CityDisplayData updatedCityDisplayData = _citiesData[index].copyWith(liveInfo: newLiveInfo);
         _citiesData = List<CityDisplayData>.of(_citiesData)..setAll(index, [updatedCityDisplayData]);
-        _citiesDataController.add(UnmodifiableListView(_citiesData));
       }
     } catch (e) {
       if (kDebugMode) {
@@ -369,9 +438,7 @@ class CityListManager extends ChangeNotifier {
       if (index != -1) {
         final CityLiveInfo errorLiveInfo = _citiesData[index].liveInfo.copyWith(
           isLoading: false,
-          // FIX: Wrap the error string in Value() as per sentinel pattern
           error: Value(e.toString()),
-          // FIX: Explicitly set weather data to null using Value(null) on error
           temperatureCelsius: Value(null),
           feelsLike: Value(null),
           humidity: Value(null),
@@ -383,7 +450,6 @@ class CityListManager extends ChangeNotifier {
         );
         final CityDisplayData updatedCityDisplayData = _citiesData[index].copyWith(liveInfo: errorLiveInfo);
         _citiesData = List<CityDisplayData>.of(_citiesData)..setAll(index, [updatedCityDisplayData]);
-        _citiesDataController.add(UnmodifiableListView(_citiesData));
       }
     }
   }
@@ -396,6 +462,7 @@ class CityListManager extends ChangeNotifier {
     _timeUpdateTimer?.cancel();
     _weatherUpdateTimer?.cancel();
     _citiesDataController.close();
+    _citiesBox.close();
     super.dispose();
   }
 }

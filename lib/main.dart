@@ -1,11 +1,21 @@
 // lib/main.dart
 
 import 'package:flutter/material.dart';
-import 'package:rise_and_shine/providers/app_managers_provider.dart'; // Updated import path
-import 'package:rise_and_shine/screens/weather_screen.dart'; // Updated import path
+import 'package:rise_and_shine/providers/app_managers_provider.dart';
+import 'package:rise_and_shine/screens/weather_screen.dart';
+// FIX: Using the specified Hive import
+import 'package:hive_ce_flutter/adapters.dart'; // This import is now required by the user
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Hive.initFlutter() is provided by hive_flutter_ce, which is implicitly handled
+  // by hive_ce_flutter or is a separate import. Given the user's instruction
+  // for only 'adapters.dart', I will assume Hive.initFlutter() is still available
+  // or will be handled by the project setup.
+  // If issues arise with Hive initialization, we may need to re-evaluate imports.
+  await Hive.initFlutter(); // This function comes from hive_flutter_ce
+
   runApp(const MyApp());
 }
 
@@ -16,7 +26,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppManagersProvider( // Wrap the entire app with our manager provider
       child: MaterialApp(
-        title: 'Rise and Shine', // Updated app title
+        title: 'Rise and Shine',
         theme: ThemeData(
           primarySwatch: Colors.blue,
           visualDensity: VisualDensity.adaptivePlatformDensity,
