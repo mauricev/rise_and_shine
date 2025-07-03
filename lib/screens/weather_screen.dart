@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:rise_and_shine/managers/city_list_manager.dart';
 import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/models/city_display_data.dart';
-import 'package:rise_and_shine/models/city_live_info.dart'; // Import CityLiveInfo for the new function
+import 'package:rise_and_shine/models/city_live_info.dart';
 import 'package:rise_and_shine/providers/app_managers_provider.dart';
 import 'package:rise_and_shine/screens/city_selection_screen.dart';
-import 'package:rise_and_shine/consts/consts_ui.dart';
+import 'package:rise_and_shine/consts/consts_ui.dart'; // Import the constants file
+import 'dart:async'; // Import for Timer
 
 class WeatherScreen extends StatefulWidget {
   const WeatherScreen({super.key});
@@ -17,11 +18,41 @@ class WeatherScreen extends StatefulWidget {
 }
 
 class _WeatherScreenState extends State<WeatherScreen> {
+  // Local state to manage the "Added" button's momentary display
+  bool _showAddedConfirmation = false;
+  Timer? _addedConfirmationTimer;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.cityListManager.fetchAvailableCities();
+    });
+  }
+
+  @override
+  void dispose() {
+    _addedConfirmationTimer?.cancel(); // Cancel timer to prevent memory leaks
+    super.dispose();
+  }
+
+  // Method to handle adding a city to the saved list
+  void _addCityToSavedList(City city) {
+    final CityListManager manager = context.cityListManager;
+    manager.addCityToSavedList(city); // Add the city via the manager
+
+    setState(() {
+      _showAddedConfirmation = true; // Show "Added" text
+    });
+
+    // Start a timer to hide the "Added" text after a brief moment
+    _addedConfirmationTimer?.cancel(); // Cancel any existing timer
+    _addedConfirmationTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _showAddedConfirmation = false; // Hide "Added" text
+        });
+      }
     });
   }
 
@@ -33,6 +64,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
       appBar: AppBar(
         title: const Text(kWeatherScreenTitle),
         centerTitle: true,
+        actions: const [],
       ),
       body: ListenableBuilder(
         listenable: manager,
@@ -82,7 +114,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
         children: [
           CircularProgressIndicator(),
           SizedBox(height: 16),
-          Text(kLoadingCities),
+          Text(kLoadingCities), // Use constant
         ],
       ),
     );
@@ -98,14 +130,14 @@ class _WeatherScreenState extends State<WeatherScreen> {
             const Icon(Icons.error_outline, color: Colors.red, size: 50),
             const SizedBox(height: 10),
             Text(
-              '$kErrorFetchingCities $error',
+              '$kErrorFetchingCities $error', // Use constant
               style: const TextStyle(color: Colors.red, fontSize: 16),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () => manager.fetchAvailableCities(),
-              child: const Text(kRetryFetchCities),
+              child: const Text(kRetryFetchCities), // Use constant
             ),
           ],
         ),
@@ -119,7 +151,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Text(
-            kNoCitySelected,
+            kNoCitySelected, // Use constant
             style: TextStyle(fontSize: 18, color: Colors.grey),
           ),
           const SizedBox(height: 20),
@@ -129,7 +161,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 MaterialPageRoute<void>(builder: (BuildContext context) => const CitySelectionScreen()),
               );
             },
-            child: const Text(kSelectACity),
+            child: const Text(kSelectACity), // Use constant
           ),
         ],
       ),
@@ -146,7 +178,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
             const Icon(Icons.error_outline, color: Colors.red, size: 50),
             const SizedBox(height: 10),
             Text(
-              '$kErrorLoadingCities ${selectedCity.name}: $error',
+              '$kErrorLoadingCities ${selectedCity.name}: $error', // Use constant
               style: const TextStyle(color: Colors.red, fontSize: 16),
               textAlign: TextAlign.center,
             ),
@@ -159,7 +191,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
   Widget _buildNoCityDataAvailableState() {
     return const Center(
       child: Text(
-        kNoCityDataAvailableAfterFetch,
+        kNoCityDataAvailableAfterFetch, // Use constant
         textAlign: TextAlign.center,
         style: TextStyle(fontSize: 16, color: Colors.grey),
       ),
@@ -169,7 +201,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
   Widget _buildSelectedCityNotFoundState(City selectedCity) {
     return Center(
       child: Text(
-        '$kDataNotFoundForCity ${selectedCity.name}. $kPleaseSelectAnotherCity',
+        '$kDataNotFoundForCity ${selectedCity.name}. $kPleaseSelectAnotherCity', // Use constants
         textAlign: TextAlign.center,
         style: const TextStyle(fontSize: 16, color: Colors.grey),
       ),
@@ -179,25 +211,30 @@ class _WeatherScreenState extends State<WeatherScreen> {
   // New private helper function to consolidate weather detail texts
   Widget _buildWeatherDetailsText(CityLiveInfo liveInfo) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch, // FIX: Ensure this column stretches
       children: [
         Text(
-          '$kFeelsLike ${liveInfo.feelsLike!.toStringAsFixed(1)}°C',
+          '$kFeelsLike ${liveInfo.feelsLike!.toStringAsFixed(1)}°C', // Use constant
           style: const TextStyle(fontSize: 18, color: Colors.blueGrey),
+          textAlign: TextAlign.center, // Center text within the stretched column
         ),
         Text(
-          '$kHumidity ${liveInfo.humidity!}%',
+          '$kHumidity ${liveInfo.humidity!}%', // Use constant
           style: const TextStyle(fontSize: 18, color: Colors.blueGrey),
+          textAlign: TextAlign.center, // Center text within the stretched column
         ),
         Text(
-          '$kWind ${liveInfo.windSpeed!.toStringAsFixed(1)} m/s ${liveInfo.windDirection}',
+          '$kWind ${liveInfo.windSpeed!.toStringAsFixed(1)} m/s ${liveInfo.windDirection}', // Use constant
           style: const TextStyle(fontSize: 18, color: Colors.blueGrey),
+          textAlign: TextAlign.center, // Center text within the stretched column
         ),
         Text(
-          '$kCondition ${liveInfo.condition ?? 'N/A'}',
+          '$kCondition ${liveInfo.condition ?? 'N/A'}', // Use constant
           style: const TextStyle(fontSize: 18, color: Colors.blueGrey),
+          textAlign: TextAlign.center, // Center text within the stretched column
         ),
         Text(
-          '$kDescription ${liveInfo.description ?? 'N/A'}',
+          '$kDescription ${liveInfo.description ?? 'N/A'}', // Use constant
           style: const TextStyle(fontSize: 16, color: Colors.grey),
           textAlign: TextAlign.center,
         ),
@@ -206,6 +243,13 @@ class _WeatherScreenState extends State<WeatherScreen> {
   }
 
   Widget _buildWeatherDisplay(CityDisplayData selectedCityDisplayData, BuildContext context) {
+    final CityListManager manager = context.cityListManager; // Access manager here for button logic
+    final City selectedCity = selectedCityDisplayData.city;
+    final bool isCityCurrentlySaved = manager.isCitySaved(selectedCity);
+
+    // Define a consistent size for the button/text to prevent layout shifts
+    const Size buttonSize = Size(80, 40); // Approximate size of the TextButton or "Added" text
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -216,63 +260,126 @@ class _WeatherScreenState extends State<WeatherScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             child: Padding(
               padding: const EdgeInsets.all(24.0),
-              child: Column(
+              child: Stack(
                 children: [
-                  Text(
-                    selectedCityDisplayData.city.name,
-                    style: const TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blueAccent,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    '$kTime ${selectedCityDisplayData.liveInfo.formattedLocalTime}',
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  if (selectedCityDisplayData.liveInfo.isLoading)
-                    const CircularProgressIndicator(strokeWidth: 3)
-                  else if (selectedCityDisplayData.liveInfo.error != null)
-                    Column(
-                      children: [
-                        const Icon(Icons.warning, color: Colors.orange, size: 40),
-                        const SizedBox(height: 8),
-                        Text(
-                          '$kWeatherError ${selectedCityDisplayData.liveInfo.error!}',
-                          style: const TextStyle(color: Colors.red, fontSize: 16),
-                          textAlign: TextAlign.center,
+                  Column( // This is the main content column
+                    crossAxisAlignment: CrossAxisAlignment.stretch, // FIX: Ensure this column stretches
+                    children: [
+                      Text(
+                        selectedCityDisplayData.city.name,
+                        style: const TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blueAccent,
                         ),
-                      ],
-                    )
-                  else if (selectedCityDisplayData.liveInfo.temperatureCelsius != null)
-                      Column(
-                        children: [
-                          Text(
-                            _getWeatherEmoji(selectedCityDisplayData.liveInfo.weatherIconCode!),
-                            style: const TextStyle(fontSize: 70),
-                          ),
-                          Text(
-                            '${selectedCityDisplayData.liveInfo.temperatureCelsius!.toStringAsFixed(1)}°C',
-                            style: const TextStyle(
-                              fontSize: 48,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        selectedCityDisplayData.liveInfo.formattedLocalTime,
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      if (selectedCityDisplayData.liveInfo.isLoading)
+                        const CircularProgressIndicator(strokeWidth: 3)
+                      else if (selectedCityDisplayData.liveInfo.error != null)
+                        Column(
+                          children: [
+                            const Icon(Icons.warning, color: Colors.orange, size: 40),
+                            const SizedBox(height: 8),
+                            Text(
+                              '$kWeatherError ${selectedCityDisplayData.liveInfo.error!}', // Use constant
+                              style: const TextStyle(color: Colors.red, fontSize: 16),
+                              textAlign: TextAlign.center,
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          _buildWeatherDetailsText(selectedCityDisplayData.liveInfo), // Call the new function
-                        ],
-                      )
-                    else
-                      const Text(kNoWeatherDataAvailable, style: TextStyle(fontSize: 16, color: Colors.grey)),
+                          ],
+                        )
+                      else if (selectedCityDisplayData.liveInfo.temperatureCelsius != null)
+                          Column(
+                            children: [
+                              Text(
+                                _getWeatherEmoji(selectedCityDisplayData.liveInfo.weatherIconCode!),
+                                style: const TextStyle(fontSize: 70),
+                              ),
+                              Text(
+                                '${selectedCityDisplayData.liveInfo.temperatureCelsius!.toStringAsFixed(1)}°C',
+                                style: const TextStyle(
+                                  fontSize: 48,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              _buildWeatherDetailsText(selectedCityDisplayData.liveInfo),
+                            ],
+                          )
+                        else
+                          const Text(kNoWeatherDataAvailable, style: TextStyle(fontSize: 16, color: Colors.grey)), // Use constant
+                    ],
+                  ),
+                  // Positioned Add button inside the Card with Container for consistent sizing
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: ListenableBuilder(
+                      listenable: manager, // Listen to manager for saved state changes
+                      builder: (BuildContext context, Widget? child) {
+                        // Re-check isCitySaved here to react to manager's state changes
+                        final bool isCityCurrentlySavedForButton = manager.isCitySaved(selectedCity);
+
+                        if (!isCityCurrentlySavedForButton && !_showAddedConfirmation) {
+                          return SizedBox(
+                            width: buttonSize.width,
+                            height: buttonSize.height,
+                            child: Align(
+                              alignment: Alignment.topRight,
+                              child: TextButton(
+                                onPressed: () => _addCityToSavedList(selectedCity),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.blue.shade700, // Adjusted color for visibility on card
+                                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  minimumSize: Size.zero, // Remove default padding
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap, // Shrink tap area
+                                ),
+                                child: const Text(kAddButton), // Use constant
+                              ),
+                            ),
+                          );
+                        } else if (_showAddedConfirmation) {
+                          return SizedBox(
+                            width: buttonSize.width,
+                            height: buttonSize.height,
+                            child: const Align(
+                              alignment: Alignment.topRight,
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                                child: Text(
+                                  kAddedConfirmation, // Use constant
+                                  style: TextStyle(
+                                    color: Colors.green, // Indicate success
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                        // Return a transparent Container with fixed size to maintain layout
+                        return SizedBox(
+                          width: buttonSize.width,
+                          height: buttonSize.height,
+                          child: Container(),
+                        );
+                      },
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -292,7 +399,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 side: BorderSide(color: Colors.blue.shade300),
               ),
-              child: const Text(kCitiesButton, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              child: const Text(kCitiesButton, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), // Use constant
             ),
           ),
         ],
