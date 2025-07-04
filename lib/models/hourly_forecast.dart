@@ -1,6 +1,5 @@
 // lib/models/hourly_forecast.dart
 
-import 'package:flutter/foundation.dart'; // For @required and Value
 import 'package:logger/logger.dart'; // For logging
 
 class HourlyForecast {

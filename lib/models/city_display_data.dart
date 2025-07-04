@@ -2,70 +2,83 @@
 
 import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/models/city_live_info.dart';
+import 'package:rise_and_shine/models/hourly_forecast.dart'; // FIX: Added missing import for HourlyForecast
+import 'package:logger/logger.dart';
 
 class CityDisplayData {
   final City city;
   final CityLiveInfo liveInfo;
-  final bool isSaved; // This property is still part of the model to track state in memory
+  final bool isSaved;
+  final List<HourlyForecast>? hourlyForecasts;
 
   CityDisplayData({
     required this.city,
     required this.liveInfo,
     this.isSaved = false,
+    this.hourlyForecasts,
   });
 
-  // NEW: Factory constructor to create a CityDisplayData object from a JSON map
-  // When loading from Hive, we assume the loaded city IS saved, so set isSaved to true.
+  // Factory constructor to create CityDisplayData from JSON (for Hive)
   factory CityDisplayData.fromJson(Map<String, dynamic> json) {
-    // FIX: Explicitly cast nested map from Hive to Map<String, dynamic>
-    final Map<String, dynamic> cityJsonMap = (json['city'] as Map).cast<String, dynamic>();
-
-    return CityDisplayData(
-      city: City.fromJson(cityJsonMap),
-      // liveInfo is NOT persisted. It will be re-fetched/re-calculated on app start.
-      // Initialize with default values, and the timezoneOffsetSeconds from the city.
-      liveInfo: CityLiveInfo(
-        currentTimeUtc: DateTime.now().toUtc(),
-        timezoneOffsetSeconds: cityJsonMap['timezoneOffsetSeconds'] as int, // Use the casted map
-        isLoading: true, // Set to true so UI shows loading while weather is fetched
+    final Logger logger = Logger(
+      printer: PrettyPrinter(
+        methodCount: 0,
+        errorMethodCount: 5,
+        lineLength: 120,
+        colors: true,
+        printEmojis: true,
+        dateTimeFormat: DateTimeFormat.onlyTime,
       ),
-      isSaved: true, // FIX: Assume true when loaded from saved list
     );
+
+    try {
+      final City city = City.fromJson(json['city'] as Map<String, dynamic>);
+      final CityLiveInfo liveInfo = CityLiveInfo.fromJson(json['liveInfo'] as Map<String, dynamic>);
+      final bool isSaved = json['isSaved'] as bool;
+
+      List<HourlyForecast>? parsedHourlyForecasts;
+      if (json['hourlyForecasts'] != null) {
+        parsedHourlyForecasts = (json['hourlyForecasts'] as List<dynamic>)
+            .map((e) => HourlyForecast.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+
+      return CityDisplayData(
+        city: city,
+        liveInfo: liveInfo,
+        isSaved: isSaved,
+        hourlyForecasts: parsedHourlyForecasts,
+      );
+    } catch (e) {
+      logger.e('CityDisplayData: Error parsing JSON: $e, JSON: $json', error: e);
+      rethrow;
+    }
   }
 
-  // NEW: Method to convert a CityDisplayData object to a JSON map
-  // Only persist the 'city' data, as 'isSaved' is implied by being in the saved list.
+  // Method to convert CityDisplayData to JSON (for Hive)
   Map<String, dynamic> toJson() {
     return {
-      'city': city.toJson(), // Convert City to JSON map
-      // FIX: 'isSaved' is no longer persisted as it's redundant
+      'city': city.toJson(),
+      'liveInfo': liveInfo.toJson(),
+      'isSaved': isSaved,
+      'hourlyForecasts': hourlyForecasts?.map((e) => e.toJson()).toList(),
     };
   }
 
-
+  // copyWith method for immutability
   CityDisplayData copyWith({
     City? city,
     CityLiveInfo? liveInfo,
     bool? isSaved,
+    Value<List<HourlyForecast>?>? hourlyForecasts,
   }) {
     return CityDisplayData(
       city: city ?? this.city,
       liveInfo: liveInfo ?? this.liveInfo,
       isSaved: isSaved ?? this.isSaved,
+      hourlyForecasts: hourlyForecasts == null
+          ? this.hourlyForecasts
+          : hourlyForecasts.value,
     );
   }
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-
-    return other is CityDisplayData &&
-        runtimeType == other.runtimeType &&
-        city == other.city &&
-        liveInfo == other.liveInfo &&
-        isSaved == other.isSaved;
-  }
-
-  @override
-  int get hashCode => city.hashCode ^ liveInfo.hashCode ^ isSaved.hashCode;
 }

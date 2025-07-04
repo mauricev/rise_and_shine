@@ -3,12 +3,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:rise_and_shine/models/city.dart';
+import 'package:rise_and_shine/models/hourly_forecast.dart'; // NEW: Import HourlyForecast model
 import 'package:logger/logger.dart';
 import 'package:flutter/foundation.dart';
 
 class OpenWeatherService {
-  static const String _apiKey = '3a31498a9b35b3ecf49b42ff22562d2b';
-  // FIX: Changed to OpenWeatherMap One Call API 3.0 endpoint
+  static const String _apiKey = '4a2b73e379f5b7f36dd6e51e291e987e';
   static const String _oneCallBaseUrl = 'https://api.openweathermap.org/data/3.0/onecall';
   static const String _geocodingBaseUrl = 'https://api.openweathermap.org/geo/1.0/reverse';
 
@@ -19,18 +19,15 @@ class OpenWeatherService {
       lineLength: 120,
       colors: true,
       printEmojis: true,
-      // FIX: Replaced deprecated 'printTime: true' with 'dateTimeFormat: DateTimeFormat.onlyTime'
       dateTimeFormat: DateTimeFormat.onlyTime,
     ),
   );
 
   Future<Map<String, dynamic>> fetchCityTimeAndWeather(City city) async {
-    // FIX: Using One Call API 3.0 endpoint.
-    // Exclude other data (minutely, hourly, daily, alerts) to only get current weather
-    // and reduce response size if only current weather is needed.
-    // 'units=metric' is used for Celsius.
+    // Changed exclude parameter to get 'hourly' data.
+    // We now exclude minutely, daily, and alerts.
     final Uri uri = Uri.parse(
-        '$_oneCallBaseUrl?lat=${city.latitude}&lon=${city.longitude}&exclude=minutely,hourly,daily,alerts&appid=$_apiKey&units=metric');
+        '$_oneCallBaseUrl?lat=${city.latitude}&lon=${city.longitude}&exclude=minutely,daily,alerts&appid=$_apiKey&units=metric');
 
     if (kDebugMode) {
       _logger.d('OpenWeatherService: Fetching weather from One Call API 3.0: $uri');
@@ -48,7 +45,6 @@ class OpenWeatherService {
       final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
 
       try {
-        // FIX: Parse data from the 'current' object within the One Call API response
         final Map<String, dynamic> currentWeatherData = data['current'] as Map<String, dynamic>;
         final List<dynamic> weatherConditions = currentWeatherData['weather'] as List<dynamic>;
         final Map<String, dynamic> firstWeatherCondition = weatherConditions[0] as Map<String, dynamic>;
@@ -61,8 +57,22 @@ class OpenWeatherService {
         final String condition = firstWeatherCondition['main'] as String;
         final String description = firstWeatherCondition['description'] as String;
         final String weatherIconCode = firstWeatherCondition['icon'] as String;
-        // FIX: Timezone offset is at the root level of the One Call API response
+        // Timezone offset is at the root level of the One Call API response
         final int timezoneOffset = data['timezone_offset'] as int;
+
+        // Parse hourly forecast data
+        List<HourlyForecast> hourlyForecasts = [];
+        if (data['hourly'] != null) {
+          final List<dynamic> hourlyDataList = data['hourly'] as List<dynamic>;
+          // Take only the next 12 hours
+          for (int i = 0; i < hourlyDataList.length && i < 12; i++) {
+            hourlyForecasts.add(HourlyForecast.fromJson(hourlyDataList[i] as Map<String, dynamic>));
+          }
+          if (kDebugMode) {
+            _logger.d('OpenWeatherService: Parsed ${hourlyForecasts.length} hourly forecasts.');
+          }
+        }
+
 
         final Map<String, dynamic> parsedData = {
           'temperatureCelsius': temperature,
@@ -74,6 +84,7 @@ class OpenWeatherService {
           'description': description,
           'weatherIconCode': weatherIconCode,
           'timezoneOffsetSeconds': timezoneOffset,
+          'hourlyForecasts': hourlyForecasts, // Include hourly forecasts in the returned map
         };
 
         if (kDebugMode) {
@@ -83,7 +94,7 @@ class OpenWeatherService {
       } catch (e) {
         if (kDebugMode) {
           _logger.e('OpenWeatherService: Error parsing weather data for ${city.name}: $e', error: e);
-          _logger.e('OpenWeatherService: Raw data that caused parsing error: $data');
+          _logger.e('OpenWeatherService: Raw data that caused parsing error: ${response.body}');
         }
         throw Exception('Failed to parse weather data for ${city.name}: $e');
       }
@@ -97,7 +108,6 @@ class OpenWeatherService {
     }
   }
 
-  // NEW: Method for reverse geocoding (lat/lon to city/country/timezone)
   Future<City?> reverseGeocode(double latitude, double longitude) async {
     // limit=1 to get only the most relevant result
     final Uri uri = Uri.parse(
@@ -125,11 +135,9 @@ class OpenWeatherService {
         final Map<String, dynamic> cityData = (data[0] as Map).cast<String, dynamic>();
         final String name = cityData['name'] as String;
         final String country = cityData['country'] as String;
-        final String? state = cityData['state'] as String?; // State can be null
+        final String? state = cityData['state'] as String?;
 
-        // For timezone offset, we need to make another call to the weather API
-        // as the geocoding API doesn't directly provide timezone offset.
-        // FIX: Using One Call API 3.0 for timezone offset as well.
+        // For timezone offset, we use the One Call API 3.0
         final Uri timezoneUri = Uri.parse(
             '$_oneCallBaseUrl?lat=$latitude&lon=$longitude&exclude=current,minutely,hourly,daily,alerts&appid=$_apiKey');
         final http.Response timezoneResponse = await http.get(timezoneUri);

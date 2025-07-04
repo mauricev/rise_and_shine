@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/models/city_display_data.dart';
 import 'package:rise_and_shine/models/city_live_info.dart';
+import 'package:rise_and_shine/models/hourly_forecast.dart'; // NEW: Import HourlyForecast
 import '../services/open_weather_service.dart';
 import '../services/search_cities_service.dart';
 import '../services/location_service.dart';
@@ -117,7 +118,6 @@ class CityListManager extends ChangeNotifier {
       _loadCitiesFromHive();
       if (kDebugMode) {
         _logger.d('CityListManager: After _loadCitiesFromHive, _citiesData count: ${_citiesData.length}');
-        // FIX: Replaced forEach with for-in loop for logging
         for (var data in _citiesData) {
           _logger.d('  - Loaded city: ${data.city.name} (Saved: ${data.isSaved})');
         }
@@ -169,7 +169,6 @@ class CityListManager extends ChangeNotifier {
 
       if (kDebugMode) {
         _logger.d('CityListManager: Final _citiesData before adding to controller: ${_citiesData.length} cities.');
-        // FIX: Replaced forEach with for-in loop for logging
         for (var data in _citiesData) {
           _logger.d('  - Final list: ${data.city.name} (Saved: ${data.isSaved})');
         }
@@ -321,6 +320,7 @@ class CityListManager extends ChangeNotifier {
           isLoading: true,
         ),
         isSaved: false,
+        hourlyForecasts: [], // Initialize empty list for new city
       );
       _citiesData = List<CityDisplayData>.of(_citiesData)..add(newCityDisplayData);
       _selectedCity = city;
@@ -379,7 +379,6 @@ class CityListManager extends ChangeNotifier {
   void _cleanUpUnsavedUnselectedCity() {
     if (kDebugMode) {
       _logger.d('CityListManager: _cleanUpUnsavedUnselectedCity called. Initial cities count: ${_citiesData.length}');
-      // FIX: Replaced forEach with for-in loop for logging
       for (var data in _citiesData) {
         _logger.d('  - Before cleanup: ${data.city.name} (Saved: ${data.isSaved}, Selected: ${data.city == _selectedCity})');
       }
@@ -403,7 +402,6 @@ class CityListManager extends ChangeNotifier {
     }
     if (kDebugMode) {
       _logger.d('CityListManager: After _cleanUpUnsavedUnselectedCity, final cities count: ${_citiesData.length}');
-      // FIX: Replaced forEach with for-in loop for logging
       for (var data in _citiesData) {
         _logger.d('  - After cleanup: ${data.city.name} (Saved: ${data.isSaved}, Selected: ${data.city == _selectedCity})');
       }
@@ -428,7 +426,6 @@ class CityListManager extends ChangeNotifier {
       _updateTimeForAllCities();
     });
 
-    // Changed weather update frequency to 10 minutes
     _weatherUpdateTimer = Timer.periodic(const Duration(minutes: 10), (Timer timer) {
       _fetchWeatherForAllCities();
     });
@@ -439,9 +436,14 @@ class CityListManager extends ChangeNotifier {
 
     final DateTime nowUtc = DateTime.now().toUtc();
     final List<CityDisplayData> updatedList = _citiesData.map((CityDisplayData cityData) {
+      // Update the time for existing hourly forecasts
+      final List<HourlyForecast>? updatedHourlyForecasts = cityData.hourlyForecasts?.map((forecast) {
+        // No change to forecast.time needed as it's already UTC and fixed for that forecast hour
+        return forecast;
+      }).toList();
+
       final CityLiveInfo newLiveInfo = cityData.liveInfo.copyWith(
         currentTimeUtc: nowUtc,
-        // Removed Value() wrapper as timezoneOffsetSeconds expects int? directly
         timezoneOffsetSeconds: cityData.liveInfo.timezoneOffsetSeconds,
         temperatureCelsius: Value(cityData.liveInfo.temperatureCelsius),
         feelsLike: Value(cityData.liveInfo.feelsLike),
@@ -454,7 +456,10 @@ class CityListManager extends ChangeNotifier {
         error: Value(cityData.liveInfo.error),
         isLoading: cityData.liveInfo.isLoading,
       );
-      return cityData.copyWith(liveInfo: newLiveInfo);
+      return cityData.copyWith(
+        liveInfo: newLiveInfo,
+        hourlyForecasts: Value(updatedHourlyForecasts), // Pass updated hourly forecasts
+      );
     }).toList();
 
     _citiesData = List<CityDisplayData>.unmodifiable(updatedList);
@@ -475,6 +480,7 @@ class CityListManager extends ChangeNotifier {
     _citiesData = _citiesData.map((CityDisplayData cityData) {
       return cityData.copyWith(
         liveInfo: cityData.liveInfo.copyWith(isLoading: true, error: Value(null)),
+        hourlyForecasts: Value(null), // Clear previous forecasts when loading new
       );
     }).toList();
     _citiesDataController.add(UnmodifiableListView(_citiesData));
@@ -514,9 +520,15 @@ class CityListManager extends ChangeNotifier {
         error: null,
       );
 
+      // Extract hourly forecasts from the API response
+      final List<HourlyForecast> hourlyForecasts = apiResponse['hourlyForecasts'] as List<HourlyForecast>;
+
       final int index = _citiesData.indexWhere((CityDisplayData c) => c.city == city);
       if (index != -1) {
-        final CityDisplayData updatedCityDisplayData = _citiesData[index].copyWith(liveInfo: newLiveInfo);
+        final CityDisplayData updatedCityDisplayData = _citiesData[index].copyWith(
+          liveInfo: newLiveInfo,
+          hourlyForecasts: Value(hourlyForecasts), // Update hourly forecasts
+        );
         _citiesData = List<CityDisplayData>.of(_citiesData)..setAll(index, [updatedCityDisplayData]);
       }
     } catch (e) {
@@ -537,7 +549,10 @@ class CityListManager extends ChangeNotifier {
           description: Value(null),
           weatherIconCode: Value(null),
         );
-        final CityDisplayData updatedCityDisplayData = _citiesData[index].copyWith(liveInfo: errorLiveInfo);
+        final CityDisplayData updatedCityDisplayData = _citiesData[index].copyWith(
+          liveInfo: errorLiveInfo,
+          hourlyForecasts: Value(null), // Clear forecasts on error
+        );
         _citiesData = List<CityDisplayData>.of(_citiesData)..setAll(index, [updatedCityDisplayData]);
       }
     }

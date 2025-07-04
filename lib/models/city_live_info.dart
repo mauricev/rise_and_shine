@@ -1,15 +1,18 @@
 // lib/models/city_live_info.dart
 
-// Define a simple Value wrapper for nullable fields in copyWith
-// This allows us to distinguish between not providing a value
-// and explicitly providing null as a value.
+import 'package:intl/intl.dart'; // For date formatting
+import 'package:logger/logger.dart';
+
+// FIX: Define the Value<T> class
+/// A wrapper for nullable values in copyWith methods to distinguish
+/// between null (meaning "don't change") and Value(null) (meaning "set to null").
 class Value<T> {
   final T value;
   const Value(this.value);
 }
 
 class CityLiveInfo {
-  final DateTime currentTimeUtc;
+  final DateTime? currentTimeUtc;
   final int timezoneOffsetSeconds;
   final double? temperatureCelsius;
   final double? feelsLike;
@@ -37,16 +40,78 @@ class CityLiveInfo {
     this.error,
   });
 
+  // Factory constructor for loading state
+  factory CityLiveInfo.loading(int timezoneOffsetSeconds) {
+    return CityLiveInfo(
+      currentTimeUtc: DateTime.now().toUtc(),
+      timezoneOffsetSeconds: timezoneOffsetSeconds,
+      isLoading: true,
+    );
+  }
+
+  // FIX: Corrected factory constructor to create CityLiveInfo from JSON
+  factory CityLiveInfo.fromJson(Map<String, dynamic> json) {
+    final Logger logger = Logger(
+      printer: PrettyPrinter(
+        methodCount: 0,
+        errorMethodCount: 5,
+        lineLength: 120,
+        colors: true,
+        printEmojis: true,
+        dateTimeFormat: DateTimeFormat.onlyTime,
+      ),
+    );
+
+    try {
+      return CityLiveInfo(
+        currentTimeUtc: json['currentTimeUtc'] != null
+            ? DateTime.parse(json['currentTimeUtc'] as String).toUtc()
+            : null,
+        timezoneOffsetSeconds: json['timezoneOffsetSeconds'] as int,
+        temperatureCelsius: (json['temperatureCelsius'] as num?)?.toDouble(),
+        feelsLike: (json['feelsLike'] as num?)?.toDouble(),
+        humidity: json['humidity'] as int?,
+        windSpeed: (json['windSpeed'] as num?)?.toDouble(),
+        windDirection: json['windDirection'] as String?,
+        condition: json['condition'] as String?,
+        description: json['description'] as String?,
+        weatherIconCode: json['weatherIconCode'] as String?,
+        isLoading: json['isLoading'] as bool,
+        error: json['error'] as String?,
+      );
+    } catch (e) {
+      logger.e('CityLiveInfo: Error parsing JSON: $e, JSON: $json', error: e);
+      rethrow;
+    }
+  }
+
+  // FIX: Corrected method to convert CityLiveInfo to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'currentTimeUtc': currentTimeUtc?.toIso8601String(),
+      'timezoneOffsetSeconds': timezoneOffsetSeconds,
+      'temperatureCelsius': temperatureCelsius,
+      'feelsLike': feelsLike,
+      'humidity': humidity,
+      'windSpeed': windSpeed,
+      'windDirection': windDirection,
+      'condition': condition,
+      'description': description,
+      'weatherIconCode': weatherIconCode,
+      'isLoading': isLoading,
+      'error': error,
+    };
+  }
+
   String get formattedLocalTime {
-    final localTime = currentTimeUtc.toUtc().add(Duration(seconds: timezoneOffsetSeconds));
-    // FIX: Removed seconds and 'Time:' prefix (from previous iteration)
-    return '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
+    if (currentTimeUtc == null) return 'N/A';
+    final DateTime localTime = currentTimeUtc!.add(Duration(seconds: timezoneOffsetSeconds));
+    return DateFormat('hh:mm a').format(localTime);
   }
 
   CityLiveInfo copyWith({
     DateTime? currentTimeUtc,
     int? timezoneOffsetSeconds,
-    // FIX: Use Value<double?> for nullable fields to implement sentinel pattern
     Value<double?>? temperatureCelsius,
     Value<double?>? feelsLike,
     Value<int?>? humidity,
@@ -56,12 +121,11 @@ class CityLiveInfo {
     Value<String?>? description,
     Value<String?>? weatherIconCode,
     bool? isLoading,
-    Value<String?>? error, // Apply sentinel to error as well
+    Value<String?>? error,
   }) {
     return CityLiveInfo(
       currentTimeUtc: currentTimeUtc ?? this.currentTimeUtc,
       timezoneOffsetSeconds: timezoneOffsetSeconds ?? this.timezoneOffsetSeconds,
-      // FIX: Apply sentinel logic: if Value is provided, use its value. Otherwise, keep existing.
       temperatureCelsius: temperatureCelsius != null ? temperatureCelsius.value : this.temperatureCelsius,
       feelsLike: feelsLike != null ? feelsLike.value : this.feelsLike,
       humidity: humidity != null ? humidity.value : this.humidity,
@@ -74,38 +138,4 @@ class CityLiveInfo {
       error: error != null ? error.value : this.error,
     );
   }
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is CityLiveInfo &&
-        runtimeType == other.runtimeType &&
-        currentTimeUtc == other.currentTimeUtc &&
-        timezoneOffsetSeconds == other.timezoneOffsetSeconds &&
-        temperatureCelsius == other.temperatureCelsius &&
-        feelsLike == other.feelsLike &&
-        humidity == other.humidity &&
-        windSpeed == other.windSpeed &&
-        windDirection == other.windDirection &&
-        condition == other.condition &&
-        description == other.description &&
-        weatherIconCode == other.weatherIconCode &&
-        isLoading == other.isLoading &&
-        error == other.error;
-  }
-
-  @override
-  int get hashCode =>
-      currentTimeUtc.hashCode ^
-      timezoneOffsetSeconds.hashCode ^
-      temperatureCelsius.hashCode ^
-      feelsLike.hashCode ^
-      humidity.hashCode ^
-      windSpeed.hashCode ^
-      windDirection.hashCode ^
-      condition.hashCode ^
-      description.hashCode ^
-      weatherIconCode.hashCode ^
-      isLoading.hashCode ^
-      error.hashCode;
 }

@@ -5,11 +5,13 @@ import 'package:rise_and_shine/managers/city_list_manager.dart';
 import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/models/city_display_data.dart';
 import 'package:rise_and_shine/models/city_live_info.dart';
+import 'package:rise_and_shine/models/hourly_forecast.dart';
 import 'package:rise_and_shine/providers/app_managers_provider.dart';
 import 'package:rise_and_shine/screens/city_selection_screen.dart';
 import 'package:rise_and_shine/consts/consts_ui.dart';
 import 'dart:async';
 import 'package:logger/logger.dart';
+import 'package:intl/intl.dart'; // Ensure this import is present and correct
 
 class WeatherScreen extends StatefulWidget {
   const WeatherScreen({super.key});
@@ -172,7 +174,6 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-  // This helper is now only for styling, actual positioning is done in _buildMainWeatherCard
   Widget _buildLocalTime(String formattedLocalTime) {
     return Text(
       formattedLocalTime,
@@ -181,7 +182,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
         fontWeight: FontWeight.w600,
         color: Colors.black87,
       ),
-      textAlign: TextAlign.center, // This alignment will be overridden by Positioned
+      textAlign: TextAlign.center,
     );
   }
 
@@ -229,7 +230,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
               ),
               textAlign: TextAlign.center,
             ),
-          const SizedBox(height: 8), // Reduced spacing here as description is now above
+          const SizedBox(height: 8),
           Text(
             '${liveInfo.temperatureCelsius!.toStringAsFixed(1)}°C',
             style: const TextStyle(
@@ -300,6 +301,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   Widget _buildMainWeatherCard(CityDisplayData selectedCityDisplayData, CityListManager manager) {
     final City selectedCity = selectedCityDisplayData.city;
+    final List<HourlyForecast>? hourlyForecasts = selectedCityDisplayData.hourlyForecasts;
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -313,23 +315,20 @@ class _WeatherScreenState extends State<WeatherScreen> {
               padding: const EdgeInsets.all(24.0),
               child: Stack(
                 children: [
-                  // Main content column (city name, weather status)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _buildCityName(selectedCityDisplayData.city.name),
-                      const SizedBox(height: 24), // Increased spacing
+                      const SizedBox(height: 24),
                       _buildWeatherStatus(selectedCityDisplayData.liveInfo),
                     ],
                   ),
-                  // Positioned Add City Button
                   _buildAddCityButton(selectedCity, manager),
-                  // FIX: Positioned Local Time at lower-left
                   Positioned(
                     left: 0,
                     bottom: 0,
                     child: Padding(
-                      padding: const EdgeInsets.only(left: 8.0, bottom: 8.0), // Adjust padding as needed
+                      padding: const EdgeInsets.only(left: 8.0, bottom: 8.0),
                       child: _buildLocalTime(selectedCityDisplayData.liveInfo.formattedLocalTime),
                     ),
                   ),
@@ -338,6 +337,63 @@ class _WeatherScreenState extends State<WeatherScreen> {
             ),
           ),
           const SizedBox(height: 20),
+          // Horizontally scrollable hourly forecast
+          if (hourlyForecasts != null && hourlyForecasts.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.0),
+              child: Text(
+                kHourlyForecastHeading,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            SizedBox(
+              height: 120, // Height for the horizontal list
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: hourlyForecasts.length,
+                itemBuilder: (context, index) {
+                  final forecast = hourlyForecasts[index];
+                  // Convert UTC time to local time using the city's timezone offset
+                  final DateTime localForecastTime = forecast.time.add(
+                    Duration(seconds: selectedCityDisplayData.city.timezoneOffsetSeconds),
+                  );
+                  return Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 3,
+                    child: Container(
+                      width: 90, // Fixed width for each hourly forecast card
+                      padding: const EdgeInsets.all(8.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            DateFormat('h a').format(localForecastTime), // e.g., "3 PM"
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _getWeatherEmoji(forecast.iconCode),
+                            style: const TextStyle(fontSize: 30),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${forecast.temperatureCelsius.toStringAsFixed(0)}°C',
+                            style: const TextStyle(fontSize: 16, color: Colors.green),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
           _buildBottomNavigationButton(context),
         ],
       ),
