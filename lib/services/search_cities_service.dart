@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 
 class SearchCitiesService {
   static const String _baseUrl = 'https://api.opencagedata.com/geocode/v1/json';
-  static const String _apiKey = 'YOUR_OPENCAGE_API_KEY'; // Replace with your actual OpenCage API Key
+  static const String _apiKey = 'c2c0d08e8d8f459b881ebe54afbd838f'; // Replace with your actual OpenCage API Key
 
   final Logger _logger = Logger(
     printer: PrettyPrinter(
@@ -17,7 +17,8 @@ class SearchCitiesService {
       lineLength: 120,
       colors: true,
       printEmojis: true,
-      printTime: true,
+      // FIX: Corrected dateTimeFormat value
+      dateTimeFormat: DateTimeFormat.onlyTime,
     ),
   );
 

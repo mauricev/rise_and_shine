@@ -173,56 +173,60 @@ class CitySelectionScreenState extends State<CitySelectionScreen> {
 
   // Helper function to build the list of cities (now accepts CityDisplayData)
   Widget _buildCityList(List<CityDisplayData> citiesToDisplay, {required bool showWeatherDetails}) {
-    return ListView.builder(
-      itemCount: citiesToDisplay.length,
-      itemBuilder: (BuildContext context, int index) {
-        final CityDisplayData cityDisplayData = citiesToDisplay[index];
-        final City city = cityDisplayData.city;
-        final CityLiveInfo liveInfo = cityDisplayData.liveInfo;
+    return Scrollbar(
+      thumbVisibility: true, // Always show the scrollbar thumb
+      thickness: 10.0, // FIX: Made the scrollbar wider
+      child: ListView.builder(
+        itemCount: citiesToDisplay.length,
+        itemBuilder: (BuildContext context, int index) {
+          final CityDisplayData cityDisplayData = citiesToDisplay[index];
+          final City city = cityDisplayData.city;
+          final CityLiveInfo liveInfo = cityDisplayData.liveInfo;
 
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 8.0),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10.0),
-          ),
-          elevation: 3,
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16.0),
-            title: Text(
-              city.name,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18.0,
-              ),
+          return Card(
+            margin: const EdgeInsets.symmetric(vertical: 8.0),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10.0),
             ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  '${city.state != null ? '${city.state}, ' : ''}${city.country}',
-                  style: const TextStyle(fontSize: 14.0),
+            elevation: 3,
+            child: ListTile(
+              contentPadding: const EdgeInsets.all(16.0),
+              title: Text(
+                city.name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18.0,
                 ),
-                // Conditionally display weather details based on showWeatherDetails flag
-                if (showWeatherDetails) ...<Widget>[
-                  const SizedBox(height: 4),
-                  if (liveInfo.isLoading)
-                    const Text('Loading weather...', style: TextStyle(fontSize: 12, color: Colors.grey))
-                  else if (liveInfo.error != null)
-                    Text('Weather error: ${liveInfo.error}', style: const TextStyle(fontSize: 12, color: Colors.red))
-                  else if (liveInfo.temperatureCelsius != null && liveInfo.condition != null)
-                      Text(
-                        '${liveInfo.formattedLocalTime} | ${liveInfo.temperatureCelsius!.toStringAsFixed(0)}°C | ${liveInfo.condition}',
-                        style: const TextStyle(fontSize: 14, color: Colors.blueGrey),
-                      )
-                    else
-                      const Text('Weather data N/A', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '${city.state != null ? '${city.state}, ' : ''}${city.country}',
+                    style: const TextStyle(fontSize: 14.0),
+                  ),
+                  // Conditionally display weather details based on showWeatherDetails flag
+                  if (showWeatherDetails) ...<Widget>[
+                    const SizedBox(height: 4),
+                    if (liveInfo.isLoading)
+                      const Text('Loading weather...', style: TextStyle(fontSize: 12, color: Colors.grey))
+                    else if (liveInfo.error != null)
+                      Text('Weather error: ${liveInfo.error}', style: const TextStyle(fontSize: 12, color: Colors.red))
+                    else if (liveInfo.temperatureCelsius != null && liveInfo.condition != null)
+                        Text(
+                          '${liveInfo.formattedLocalTime} | ${liveInfo.temperatureCelsius!.toStringAsFixed(0)}°C | ${liveInfo.condition}',
+                          style: const TextStyle(fontSize: 14, color: Colors.blueGrey),
+                        )
+                      else
+                        const Text('Weather data N/A', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
                 ],
-              ],
+              ),
+              onTap: () => _onCitySelected(city),
             ),
-            onTap: () => _onCitySelected(city),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

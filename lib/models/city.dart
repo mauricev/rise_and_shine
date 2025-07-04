@@ -1,7 +1,5 @@
 // lib/models/city.dart
 
-import 'dart:convert'; // For JSON encoding/decoding
-
 class City {
   final String name;
   final String country;

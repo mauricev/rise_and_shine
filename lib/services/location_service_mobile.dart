@@ -6,6 +6,7 @@ import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/services/open_weather_service.dart';
 import 'package:logger/logger.dart';
 import 'package:geolocator/geolocator.dart'; // Mobile-specific import
+import 'package:flutter/foundation.dart'; // NEW: Import for defaultTargetPlatform
 
 // The actual LocationService implementation for mobile
 class LocationService {
@@ -20,7 +21,8 @@ class LocationService {
       lineLength: 120,
       colors: true,
       printEmojis: true,
-      printTime: true,
+      // FIX: Corrected dateTimeFormat value
+      dateTimeFormat: DateTimeFormat.onlyTime,
     ),
   );
 
@@ -47,17 +49,17 @@ class LocationService {
   Future<City?> _getCurrentCityLocationMobile() async {
     _logger.d('LocationService (Mobile): Attempting mobile geolocation...');
     bool serviceEnabled;
-    LocationPermission permission; // Use direct LocationPermission
+    LocationPermission permission;
 
-    serviceEnabled = await Geolocator.isLocationServiceEnabled(); // Use direct Geolocator
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       _logger.e('LocationService (Mobile): Location services are disabled.');
       return null;
     }
 
-    permission = await Geolocator.checkPermission(); // Use direct Geolocator
+    permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission(); // Use direct Geolocator
+      permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         _logger.e('LocationService (Mobile): Location permissions are denied by user.');
         return null;
@@ -70,8 +72,30 @@ class LocationService {
     }
 
     try {
-      Position position = await Geolocator.getCurrentPosition( // Use direct Geolocator
-        desiredAccuracy: LocationAccuracy.low, // Use direct LocationAccuracy
+      // FIX: Use defaultTargetPlatform to conditionally provide settings
+      LocationSettings locationSettings;
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        locationSettings = AndroidSettings(
+          accuracy: LocationAccuracy.low,
+          forceLocationManager: false, // Use FusedLocationProviderClient if available
+          // You can add more Android-specific settings here if needed
+        );
+      } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+        locationSettings = AppleSettings(
+          accuracy: LocationAccuracy.low,
+          activityType: ActivityType.other,
+          // You can add more iOS-specific settings here if needed
+        );
+      } else {
+        // Fallback for other platforms (e.g., desktop, Fuchsia) if needed,
+        // though geolocator primarily targets mobile/web.
+        locationSettings = LocationSettings(
+          accuracy: LocationAccuracy.low,
+        );
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        locationSettings: locationSettings,
       );
       _logger.d('LocationService (Mobile): Mobile geolocation successful: ${position.latitude}, ${position.longitude}');
 

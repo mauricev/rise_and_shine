@@ -55,22 +55,17 @@ class CityListManager extends ChangeNotifier {
       lineLength: 120,
       colors: true,
       printEmojis: true,
-      printTime: true,
+      dateTimeFormat: DateTimeFormat.onlyTime,
     ),
   );
 
   final Completer<void> _initCompleter = Completer<void>();
   Future<void> get initialized => _initCompleter.future;
 
-  // FIX: Removed the duplicate unnamed constructor.
-  // The factory constructor below is now the primary way to create CityListManager.
-
-  // Factory constructor to ensure services are instantiated once and correctly wired
-  // before the manager's initialization process begins.
   factory CityListManager() {
     final OpenWeatherService weatherService = OpenWeatherService();
     final SearchCitiesService searchCitiesService = SearchCitiesService();
-    final LocationService locationService = LocationService(openWeatherService: weatherService); // Use the single instance
+    final LocationService locationService = LocationService(openWeatherService: weatherService);
 
     final manager = CityListManager._internal(
       weatherService: weatherService,
@@ -78,7 +73,6 @@ class CityListManager extends ChangeNotifier {
       locationService: locationService,
     );
 
-    // Start the asynchronous initialization process for the manager
     manager._initializeManager().then((_) {
       manager._initCompleter.complete();
       manager._logger.d('CityListManager: Initialization completed successfully.');
@@ -90,8 +84,6 @@ class CityListManager extends ChangeNotifier {
     return manager;
   }
 
-  // Private constructor to allow instantiation with pre-created services.
-  // This is called by the factory constructor.
   CityListManager._internal({
     required OpenWeatherService weatherService,
     required SearchCitiesService searchCitiesService,
@@ -109,6 +101,10 @@ class CityListManager extends ChangeNotifier {
     _isSearchingCities = false;
     _searchCitiesError = null;
 
+    if (kDebugMode) {
+      _logger.d('CityListManager: _initializeManager started.');
+    }
+
     try {
       if (!Hive.isBoxOpen(_citiesBoxName)) {
         _citiesBox = await Hive.openBox(_citiesBoxName);
@@ -119,17 +115,25 @@ class CityListManager extends ChangeNotifier {
       }
 
       _loadCitiesFromHive();
+      if (kDebugMode) {
+        _logger.d('CityListManager: After _loadCitiesFromHive, _citiesData count: ${_citiesData.length}');
+        // FIX: Replaced forEach with for-in loop for logging
+        for (var data in _citiesData) {
+          _logger.d('  - Loaded city: ${data.city.name} (Saved: ${data.isSaved})');
+        }
+      }
+
 
       City? currentLocationCity;
       try {
         currentLocationCity = await _locationService.getCurrentCityLocation();
         if (currentLocationCity != null) {
-          _logger.d('CityListManager: Detected current location: ${currentLocationCity.name}');
+          _logger.d('CityListManager: Detected current location: ${currentLocationCity.name}, ${currentLocationCity.country}');
         } else {
-          _logger.d('CityListManager: Could not detect current location.');
+          _logger.d('CityListManager: Could not detect current location via LocationService.');
         }
       } catch (e) {
-        _logger.e('CityListManager: Error getting current location: $e', error: e);
+        _logger.e('CityListManager: Error getting current location from LocationService: $e', error: e);
         currentLocationCity = null;
       }
 
@@ -137,7 +141,7 @@ class CityListManager extends ChangeNotifier {
         _selectedCity = _citiesData.first.city;
         _logger.d('CityListManager: Selected first loaded city: ${_selectedCity!.name}');
       } else if (currentLocationCity != null) {
-        _logger.d('CityListManager: No saved cities, selecting current location: ${currentLocationCity.name}');
+        _logger.d('CityListManager: No saved cities, attempting to use current location: ${currentLocationCity.name}');
 
         final CityDisplayData? existingCityData = _citiesData.firstWhereOrNull(
                 (data) => data.city.name == currentLocationCity!.name && data.city.country == currentLocationCity.country);
@@ -153,14 +157,22 @@ class CityListManager extends ChangeNotifier {
               timezoneOffsetSeconds: currentLocationCity.timezoneOffsetSeconds,
               isLoading: true,
             ),
-            isSaved: false,
+            isSaved: false, // Mark as unsaved initially
           );
           _citiesData = List<CityDisplayData>.of(_citiesData)..insert(0, newCityDisplayData);
           _selectedCity = currentLocationCity;
-          _logger.d('CityListManager: Added current location as unsaved selected city: ${currentLocationCity.name}');
+          _logger.d('CityListManager: Added current location as unsaved selected city: ${currentLocationCity.name}. Current _citiesData count: ${_citiesData.length}');
         }
       } else {
         _logger.d('CityListManager: No saved cities and no current location detected. App starts with no city selected.');
+      }
+
+      if (kDebugMode) {
+        _logger.d('CityListManager: Final _citiesData before adding to controller: ${_citiesData.length} cities.');
+        // FIX: Replaced forEach with for-in loop for logging
+        for (var data in _citiesData) {
+          _logger.d('  - Final list: ${data.city.name} (Saved: ${data.isSaved})');
+        }
       }
 
       _citiesDataController.add(UnmodifiableListView(_citiesData));
@@ -349,9 +361,6 @@ class CityListManager extends ChangeNotifier {
 
   bool isCitySaved(City city) {
     final bool saved = _citiesData.any((CityDisplayData data) => data.city == city && data.isSaved);
-    if (kDebugMode) {
-      _logger.d('CityListManager: isCitySaved for ${city.name}: $saved');
-    }
     return saved;
   }
 
@@ -369,8 +378,13 @@ class CityListManager extends ChangeNotifier {
 
   void _cleanUpUnsavedUnselectedCity() {
     if (kDebugMode) {
-      _logger.d('CityListManager: _cleanUpUnsavedUnselectedCity called. Current cities count: ${_citiesData.length}');
+      _logger.d('CityListManager: _cleanUpUnsavedUnselectedCity called. Initial cities count: ${_citiesData.length}');
+      // FIX: Replaced forEach with for-in loop for logging
+      for (var data in _citiesData) {
+        _logger.d('  - Before cleanup: ${data.city.name} (Saved: ${data.isSaved}, Selected: ${data.city == _selectedCity})');
+      }
     }
+
     final List<CityDisplayData> currentCities = List<CityDisplayData>.of(_citiesData);
     final int initialCount = currentCities.length;
     // Remove cities that are NOT saved and are NOT the currently selected city
@@ -387,6 +401,13 @@ class CityListManager extends ChangeNotifier {
         _logger.d('CityListManager: No unsaved, unselected cities to remove.');
       }
     }
+    if (kDebugMode) {
+      _logger.d('CityListManager: After _cleanUpUnsavedUnselectedCity, final cities count: ${_citiesData.length}');
+      // FIX: Replaced forEach with for-in loop for logging
+      for (var data in _citiesData) {
+        _logger.d('  - After cleanup: ${data.city.name} (Saved: ${data.isSaved}, Selected: ${data.city == _selectedCity})');
+      }
+    }
   }
 
   void _startTimers() {
@@ -397,28 +418,31 @@ class CityListManager extends ChangeNotifier {
     _weatherUpdateTimer?.cancel();
 
     if (_citiesData.isNotEmpty) {
+      _logger.d('CityListManager: _startTimers: _citiesData is not empty, initiating _fetchWeatherForAllCities.');
       _fetchWeatherForAllCities();
     } else {
-      _logger.d('CityListManager: _citiesData is empty, skipping initial weather fetch.');
+      _logger.d('CityListManager: _startTimers: _citiesData is empty, skipping initial weather fetch.');
     }
 
     _timeUpdateTimer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
       _updateTimeForAllCities();
     });
 
-    _weatherUpdateTimer = Timer.periodic(const Duration(minutes: 5), (Timer timer) {
+    // Changed weather update frequency to 10 minutes
+    _weatherUpdateTimer = Timer.periodic(const Duration(minutes: 10), (Timer timer) {
       _fetchWeatherForAllCities();
     });
   }
 
   void _updateTimeForAllCities() {
     if (_citiesData.isEmpty) return;
-    _logger.d('CityListManager: _updateTimeForAllCities called.');
 
     final DateTime nowUtc = DateTime.now().toUtc();
     final List<CityDisplayData> updatedList = _citiesData.map((CityDisplayData cityData) {
       final CityLiveInfo newLiveInfo = cityData.liveInfo.copyWith(
         currentTimeUtc: nowUtc,
+        // Removed Value() wrapper as timezoneOffsetSeconds expects int? directly
+        timezoneOffsetSeconds: cityData.liveInfo.timezoneOffsetSeconds,
         temperatureCelsius: Value(cityData.liveInfo.temperatureCelsius),
         feelsLike: Value(cityData.liveInfo.feelsLike),
         humidity: Value(cityData.liveInfo.humidity),

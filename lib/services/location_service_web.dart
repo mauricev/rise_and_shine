@@ -1,13 +1,17 @@
 // lib/services/location_service_web.dart
 
+import 'dart:async'; // Needed for Completer and TimeoutException
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/services/open_weather_service.dart';
 import 'package:logger/logger.dart';
-import 'dart:html' as html; // Web-specific import
 
-// The actual LocationService implementation for web
+// Correct import for package:web
+import 'package:web/web.dart' as web; // Alias as web
+// Explicitly import dart:js_interop for .toJS extension
+import 'dart:js_interop'; // This provides the .toJS extension on Function
+
 class LocationService {
   static const String _ipApiUrl = 'https://ipapi.co/json/';
 
@@ -20,7 +24,8 @@ class LocationService {
       lineLength: 120,
       colors: true,
       printEmojis: true,
-      printTime: true,
+      // FIX: Corrected dateTimeFormat value
+      dateTimeFormat: DateTimeFormat.onlyTime,
     ),
   );
 
@@ -43,15 +48,43 @@ class LocationService {
     return detectedCity;
   }
 
-  // --- Web Implementation (Browser Geolocation) ---
+  // --- Web Implementation (Browser Geolocation using package:web) ---
   Future<City?> _getCurrentCityLocationWeb() async {
     _logger.d('LocationService (Web): Attempting web geolocation...');
-    try {
-      final html.Geolocation geolocation = html.window.navigator.geolocation;
-      final html.Geoposition position = await geolocation.getCurrentPosition();
+    final Completer<web.GeolocationPosition> completer = Completer();
+    final web.Geolocation geolocation = web.window.navigator.geolocation;
 
-      final double latitude = position.coords!.latitude!.toDouble();
-      final double longitude = position.coords!.longitude!.toDouble();
+    try {
+      // Define success and error callbacks using explicit types for clarity
+      final web.PositionCallback successCallback = (web.GeolocationPosition position) {
+        completer.complete(position);
+      }.toJS; // Use .toJS extension from dart:js_interop
+
+      final web.PositionErrorCallback errorCallback = (web.GeolocationPositionError error) {
+        completer.completeError(Exception('Geolocation error: ${error.message} (Code: ${error.code})'));
+      }.toJS; // Use .toJS extension from dart:js_interop
+
+      // FIX: Changed GeolocationOptions to PositionOptions
+      geolocation.getCurrentPosition(
+        successCallback,
+        errorCallback,
+        web.PositionOptions( // Corrected to web.PositionOptions
+          enableHighAccuracy: false, // Low accuracy for faster results, less battery
+          timeout: 10000, // 10 seconds
+          maximumAge: 60000, // Use cached position if less than 1 minute old
+        ),
+      );
+
+      // Await the completer's future, with an additional Dart timeout for safety
+      final web.GeolocationPosition position = await completer.future.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw TimeoutException('Geolocation request timed out.');
+        },
+      );
+
+      final double latitude = position.coords.latitude.toDouble();
+      final double longitude = position.coords.longitude.toDouble();
       _logger.d('LocationService (Web): Web geolocation successful: $latitude, $longitude');
 
       // Use OpenWeatherService to reverse geocode these precise coordinates
