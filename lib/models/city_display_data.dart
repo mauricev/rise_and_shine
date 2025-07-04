@@ -2,7 +2,6 @@
 
 import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/models/city_live_info.dart';
-import 'dart:convert'; // For JSON encoding/decoding
 
 class CityDisplayData {
   final City city;

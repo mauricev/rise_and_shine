@@ -8,8 +8,9 @@ import 'package:rise_and_shine/models/city_display_data.dart';
 import 'package:rise_and_shine/models/city_live_info.dart';
 import '../services/open_weather_service.dart';
 import '../services/search_cities_service.dart';
+import '../services/location_service.dart';
 import 'package:logger/logger.dart';
-import 'package:hive_ce_flutter/adapters.dart'; // Import Hive
+import 'package:hive_ce_flutter/adapters.dart';
 
 class CityListManager extends ChangeNotifier {
   static const String _citiesBoxName = 'savedCitiesBox';
@@ -17,6 +18,7 @@ class CityListManager extends ChangeNotifier {
 
   final OpenWeatherService _weatherService;
   final SearchCitiesService _searchCitiesService;
+  final LocationService _locationService;
 
   List<CityDisplayData> _citiesData = [];
 
@@ -24,7 +26,6 @@ class CityListManager extends ChangeNotifier {
 
   City? _selectedCity;
 
-  // FIX: Corrected stream type from List<List<CityDisplayData>> to List<CityDisplayData>
   final StreamController<List<CityDisplayData>> _citiesDataController =
   StreamController<List<CityDisplayData>>.broadcast();
 
@@ -61,19 +62,44 @@ class CityListManager extends ChangeNotifier {
   final Completer<void> _initCompleter = Completer<void>();
   Future<void> get initialized => _initCompleter.future;
 
-  CityListManager({
-    OpenWeatherService? weatherService,
-    required SearchCitiesService searchCitiesService,
-  })  : _weatherService = weatherService ?? OpenWeatherService(),
-        _searchCitiesService = searchCitiesService {
-    _initializeManager().then((_) {
-      _initCompleter.complete();
-      _logger.d('CityListManager: Initialization completed successfully.');
+  // FIX: Removed the duplicate unnamed constructor.
+  // The factory constructor below is now the primary way to create CityListManager.
+
+  // Factory constructor to ensure services are instantiated once and correctly wired
+  // before the manager's initialization process begins.
+  factory CityListManager() {
+    final OpenWeatherService weatherService = OpenWeatherService();
+    final SearchCitiesService searchCitiesService = SearchCitiesService();
+    final LocationService locationService = LocationService(openWeatherService: weatherService); // Use the single instance
+
+    final manager = CityListManager._internal(
+      weatherService: weatherService,
+      searchCitiesService: searchCitiesService,
+      locationService: locationService,
+    );
+
+    // Start the asynchronous initialization process for the manager
+    manager._initializeManager().then((_) {
+      manager._initCompleter.complete();
+      manager._logger.d('CityListManager: Initialization completed successfully.');
     }).catchError((e) {
-      _initCompleter.completeError(e);
-      _logger.e('CityListManager: Initialization failed: $e', error: e);
+      manager._initCompleter.completeError(e);
+      manager._logger.e('CityListManager: Initialization failed: $e', error: e);
     });
+
+    return manager;
   }
+
+  // Private constructor to allow instantiation with pre-created services.
+  // This is called by the factory constructor.
+  CityListManager._internal({
+    required OpenWeatherService weatherService,
+    required SearchCitiesService searchCitiesService,
+    required LocationService locationService,
+  })  : _weatherService = weatherService,
+        _searchCitiesService = searchCitiesService,
+        _locationService = locationService;
+
 
   Future<void> _initializeManager() async {
     _citiesData = [];
@@ -94,12 +120,55 @@ class CityListManager extends ChangeNotifier {
 
       _loadCitiesFromHive();
 
+      City? currentLocationCity;
+      try {
+        currentLocationCity = await _locationService.getCurrentCityLocation();
+        if (currentLocationCity != null) {
+          _logger.d('CityListManager: Detected current location: ${currentLocationCity.name}');
+        } else {
+          _logger.d('CityListManager: Could not detect current location.');
+        }
+      } catch (e) {
+        _logger.e('CityListManager: Error getting current location: $e', error: e);
+        currentLocationCity = null;
+      }
+
+      if (_citiesData.isNotEmpty) {
+        _selectedCity = _citiesData.first.city;
+        _logger.d('CityListManager: Selected first loaded city: ${_selectedCity!.name}');
+      } else if (currentLocationCity != null) {
+        _logger.d('CityListManager: No saved cities, selecting current location: ${currentLocationCity.name}');
+
+        final CityDisplayData? existingCityData = _citiesData.firstWhereOrNull(
+                (data) => data.city.name == currentLocationCity!.name && data.city.country == currentLocationCity.country);
+
+        if (existingCityData != null) {
+          _selectedCity = existingCityData.city;
+          _logger.d('CityListManager: Current location matches existing saved city: ${existingCityData.city.name}. Selecting it.');
+        } else {
+          final CityDisplayData newCityDisplayData = CityDisplayData(
+            city: currentLocationCity,
+            liveInfo: CityLiveInfo(
+              currentTimeUtc: DateTime.now().toUtc(),
+              timezoneOffsetSeconds: currentLocationCity.timezoneOffsetSeconds,
+              isLoading: true,
+            ),
+            isSaved: false,
+          );
+          _citiesData = List<CityDisplayData>.of(_citiesData)..insert(0, newCityDisplayData);
+          _selectedCity = currentLocationCity;
+          _logger.d('CityListManager: Added current location as unsaved selected city: ${currentLocationCity.name}');
+        }
+      } else {
+        _logger.d('CityListManager: No saved cities and no current location detected. App starts with no city selected.');
+      }
+
       _citiesDataController.add(UnmodifiableListView(_citiesData));
-      if (hasListeners) notifyListeners(); // Check hasListeners
+      if (hasListeners) notifyListeners();
     } catch (e) {
       _logger.e('CityListManager: Error initializing Hive or loading cities: $e', error: e);
       _citiesFetchError = 'Failed to initialize app data: ${e.toString()}';
-      if (hasListeners) notifyListeners(); // Check hasListeners
+      if (hasListeners) notifyListeners();
       rethrow;
     }
   }
@@ -123,10 +192,6 @@ class CityListManager extends ChangeNotifier {
         } catch (e) {
           _logger.e('CityListManager: Error parsing saved city from Hive: $e, data: $jsonItem', error: e);
         }
-      }
-      if (_citiesData.isNotEmpty) {
-        _selectedCity = _citiesData.first.city;
-        _logger.d('CityListManager: Selected first loaded city: ${_selectedCity!.name}');
       }
     } else {
       _logger.d('CityListManager: No saved cities found in Hive.');

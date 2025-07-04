@@ -47,5 +47,13 @@
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
     <string>This app uses the local network for debugging and development.</string>
+    <!-- Permissions for geolocator -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>This app needs access to your location to show weather for your current city.</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>This app needs access to your location even when in the background to provide continuous weather updates.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>This app needs access to your location to show weather for your current city, and can optionally update in the background.</string>
+
 </dict>
 </plist>

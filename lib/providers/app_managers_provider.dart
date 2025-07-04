@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:rise_and_shine/managers/city_list_manager.dart';
-import 'package:rise_and_shine/services/search_cities_service.dart';
 
 class AppManagersProvider extends StatefulWidget {
   final Widget child;
@@ -25,14 +24,13 @@ class AppManagersProvider extends StatefulWidget {
 
 class AppManagersProviderState extends State<AppManagersProvider> {
   late final CityListManager cityListManager;
-  // Removed: late final SearchCitiesService searchCitiesService; // No longer provided directly
 
   @override
   void initState() {
     super.initState();
-    // Instantiate SearchCitiesService and pass it to CityListManager
-    final SearchCitiesService searchCitiesService = SearchCitiesService();
-    cityListManager = CityListManager(searchCitiesService: searchCitiesService);
+    // Removed: final SearchCitiesService searchCitiesService = SearchCitiesService();
+    // SearchCitiesService is now instantiated within CityListManager
+    cityListManager = CityListManager(); // No parameters needed here anymore
   }
 
   @override
@@ -79,5 +77,4 @@ class _AppManagersInheritedWidget extends InheritedWidget {
 
 extension BuildContextManagerExtensions on BuildContext {
   CityListManager get cityListManager => _AppManagersInheritedWidget._getManager<CityListManager>(this)!;
-// Removed: SearchCitiesService get searchCitiesService => _AppManagersInheritedWidget._getManager<SearchCitiesService>(this)!; // No longer provided directly
 }

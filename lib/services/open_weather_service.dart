@@ -3,22 +3,23 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:rise_and_shine/models/city.dart';
-import 'package:logger/logger.dart'; // Import the logger plugin
-import 'package:flutter/foundation.dart'; // For kDebugMode
+import 'package:logger/logger.dart';
+import 'package:flutter/foundation.dart';
 
 class OpenWeatherService {
   static const String _apiKey = '4a2b73e379f5b7f36dd6e51e291e987e';
   static const String _weatherBaseUrl = 'https://api.openweathermap.org/data/2.5/weather';
+  // NEW: OpenWeatherMap Geocoding API endpoint
+  static const String _geocodingBaseUrl = 'https://api.openweathermap.org/geo/1.0/reverse';
 
-  // Instantiate the logger
   final Logger _logger = Logger(
     printer: PrettyPrinter(
-      methodCount: 0, // No method calls to be displayed
-      errorMethodCount: 5, // Number of method calls if stacktrace is provided
-      lineLength: 120, // Width of the output
-      colors: true, // Colorful log messages
-      printEmojis: true, // Print emojis for log messages
-      printTime: true, // Should each log message contain a timestamp
+      methodCount: 0,
+      errorMethodCount: 5,
+      lineLength: 120,
+      colors: true,
+      printEmojis: true,
+      printTime: true,
     ),
   );
 
@@ -70,7 +71,6 @@ class OpenWeatherService {
         return parsedData;
       } catch (e) {
         if (kDebugMode) {
-          // FIX: Changed to use named argument 'error' for the exception object
           _logger.e('OpenWeatherService: Error parsing weather data for ${city.name}: $e', error: e);
           _logger.e('OpenWeatherService: Raw data that caused parsing error: $data');
         }
@@ -83,6 +83,64 @@ class OpenWeatherService {
         _logger.e('OpenWeatherService: Failed to load weather data for ${city.name}. Status: ${response.statusCode}, Message: $errorMessage');
       }
       throw Exception('Failed to load weather data for ${city.name}: $errorMessage (Status: ${response.statusCode})');
+    }
+  }
+
+  // NEW: Method for reverse geocoding (lat/lon to city/country/timezone)
+  // This method will be used by LocationService to convert precise coordinates to a City object.
+  Future<City?> reverseGeocode(double latitude, double longitude) async {
+    _logger.d('OpenWeatherService: Starting reverse geocoding and timezone lookup for $latitude, $longitude');
+    try {
+      // 1. Reverse Geocoding to get City Name, Country, State
+      final Uri geocodingUri = Uri.parse(
+          '$_geocodingBaseUrl?lat=$latitude&lon=$longitude&limit=1&appid=$_apiKey');
+      final http.Response geoResponse = await http.get(geocodingUri);
+
+      if (geoResponse.statusCode != 200) {
+        final Map<String, dynamic> errorData = jsonDecode(geoResponse.body) as Map<String, dynamic>;
+        final String errorMessage = errorData['message'] as String? ?? 'Unknown geocoding error';
+        _logger.e('OpenWeatherService: Geocoding failed: ${geoResponse.statusCode}, $errorMessage');
+        throw Exception('Geocoding failed: $errorMessage');
+      }
+
+      final List<dynamic> geoDataList = jsonDecode(geoResponse.body) as List<dynamic>;
+      if (geoDataList.isEmpty) {
+        _logger.d('OpenWeatherService: No geocoding results found for $latitude, $longitude.');
+        return null;
+      }
+      final Map<String, dynamic> geoData = (geoDataList[0] as Map).cast<String, dynamic>();
+      final String name = geoData['name'] as String;
+      final String country = geoData['country'] as String;
+      final String? state = geoData['state'] as String?;
+
+      // 2. Fetch timezone offset using the weather API
+      // The weather API response contains the 'timezone' field.
+      final Uri weatherUri = Uri.parse(
+          '$_weatherBaseUrl?lat=$latitude&lon=$longitude&appid=$_apiKey');
+      final http.Response weatherResponse = await http.get(weatherUri);
+
+      if (weatherResponse.statusCode != 200) {
+        final Map<String, dynamic> errorData = jsonDecode(weatherResponse.body) as Map<String, dynamic>;
+        final String errorMessage = errorData['message'] as String? ?? 'Unknown weather API error';
+        _logger.e('OpenWeatherService: Weather API (for timezone) failed: ${weatherResponse.statusCode}, $errorMessage');
+        throw Exception('Weather API (for timezone) failed: $errorMessage');
+      }
+
+      final Map<String, dynamic> weatherData = jsonDecode(weatherResponse.body) as Map<String, dynamic>;
+      final int timezoneOffsetSeconds = weatherData['timezone'] as int;
+
+      _logger.d('OpenWeatherService: Successfully reverse geocoded and got timezone for $name.');
+      return City(
+        name: name,
+        country: country,
+        state: state,
+        latitude: latitude,
+        longitude: longitude,
+        timezoneOffsetSeconds: timezoneOffsetSeconds,
+      );
+    } catch (e) {
+      _logger.e('OpenWeatherService: Error in reverseGeocode: $e', error: e);
+      return null; // Return null if any part of the process fails
     }
   }
 
