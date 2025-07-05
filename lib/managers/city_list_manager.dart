@@ -6,12 +6,14 @@ import 'package:flutter/foundation.dart';
 import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/models/city_display_data.dart';
 import 'package:rise_and_shine/models/city_live_info.dart';
-import 'package:rise_and_shine/models/hourly_forecast.dart'; // NEW: Import HourlyForecast
+import 'package:rise_and_shine/models/hourly_forecast.dart';
+import 'package:rise_and_shine/models/daily_forecast.dart';
 import '../services/open_weather_service.dart';
 import '../services/search_cities_service.dart';
 import '../services/location_service.dart';
 import 'package:logger/logger.dart';
-import 'package:hive_ce_flutter/adapters.dart';
+import 'package:hive_ce_flutter/adapters.dart'; // Keep this for Hive functionality
+
 
 class CityListManager extends ChangeNotifier {
   static const String _citiesBoxName = 'savedCitiesBox';
@@ -115,15 +117,6 @@ class CityListManager extends ChangeNotifier {
         _logger.d('CityListManager: Hive box "$_citiesBoxName" already open.');
       }
 
-      _loadCitiesFromHive();
-      if (kDebugMode) {
-        _logger.d('CityListManager: After _loadCitiesFromHive, _citiesData count: ${_citiesData.length}');
-        for (var data in _citiesData) {
-          _logger.d('  - Loaded city: ${data.city.name} (Saved: ${data.isSaved})');
-        }
-      }
-
-
       City? currentLocationCity;
       try {
         currentLocationCity = await _locationService.getCurrentCityLocation();
@@ -137,40 +130,43 @@ class CityListManager extends ChangeNotifier {
         currentLocationCity = null;
       }
 
-      if (_citiesData.isNotEmpty) {
+      // FIX: Prioritize current location if found
+      if (currentLocationCity != null) {
+        _logger.d('CityListManager: Attempting to use current location: ${currentLocationCity.name}');
+        final CityDisplayData newCityDisplayData = CityDisplayData(
+          city: currentLocationCity,
+          liveInfo: CityLiveInfo(
+            currentTimeUtc: DateTime.now().toUtc(),
+            timezoneOffsetSeconds: currentLocationCity.timezoneOffsetSeconds,
+            isLoading: true,
+          ),
+          isSaved: false, // Current location is initially unsaved
+          hourlyForecasts: [],
+          dailyForecasts: [],
+        );
+        // Insert current location at the beginning of the list
+        _citiesData = List<CityDisplayData>.of(_citiesData)..insert(0, newCityDisplayData);
+        _selectedCity = currentLocationCity;
+        _logger.d('CityListManager: Added current location as selected city: ${currentLocationCity.name}.');
+      }
+
+      // Now load saved cities. If current location was added, it's at index 0.
+      _loadCitiesFromHive(); // This will add saved cities to _citiesData
+
+      // If no current location was found or if _citiesData is still empty after loading saved cities,
+      // then try to select the first saved city if any exist.
+      if (_selectedCity == null && _citiesData.isNotEmpty) {
         _selectedCity = _citiesData.first.city;
-        _logger.d('CityListManager: Selected first loaded city: ${_selectedCity!.name}');
-      } else if (currentLocationCity != null) {
-        _logger.d('CityListManager: No saved cities, attempting to use current location: ${currentLocationCity.name}');
-
-        final CityDisplayData? existingCityData = _citiesData.firstWhereOrNull(
-                (data) => data.city.name == currentLocationCity!.name && data.city.country == currentLocationCity.country);
-
-        if (existingCityData != null) {
-          _selectedCity = existingCityData.city;
-          _logger.d('CityListManager: Current location matches existing saved city: ${existingCityData.city.name}. Selecting it.');
-        } else {
-          final CityDisplayData newCityDisplayData = CityDisplayData(
-            city: currentLocationCity,
-            liveInfo: CityLiveInfo(
-              currentTimeUtc: DateTime.now().toUtc(),
-              timezoneOffsetSeconds: currentLocationCity.timezoneOffsetSeconds,
-              isLoading: true,
-            ),
-            isSaved: false, // Mark as unsaved initially
-          );
-          _citiesData = List<CityDisplayData>.of(_citiesData)..insert(0, newCityDisplayData);
-          _selectedCity = currentLocationCity;
-          _logger.d('CityListManager: Added current location as unsaved selected city: ${currentLocationCity.name}. Current _citiesData count: ${_citiesData.length}');
-        }
-      } else {
+        _logger.d('CityListManager: No current location, selected first loaded city: ${_selectedCity!.name}');
+      } else if (_selectedCity == null && _citiesData.isEmpty) {
         _logger.d('CityListManager: No saved cities and no current location detected. App starts with no city selected.');
       }
+
 
       if (kDebugMode) {
         _logger.d('CityListManager: Final _citiesData before adding to controller: ${_citiesData.length} cities.');
         for (var data in _citiesData) {
-          _logger.d('  - Final list: ${data.city.name} (Saved: ${data.isSaved})');
+          _logger.d('  - Final list: ${data.city.name} (Saved: ${data.isSaved}, Selected: ${data.city == _selectedCity})');
         }
       }
 
@@ -185,9 +181,11 @@ class CityListManager extends ChangeNotifier {
   }
 
   void _loadCitiesFromHive() {
-    _citiesData = [];
+    // This method is now called *after* attempting to get current location.
+    // It should add saved cities to _citiesData without overriding the current location if present.
+    _citiesData = _citiesData.where((data) => data.city == _selectedCity && !data.isSaved).toList(); // Keep selected unsaved city if it exists
     if (kDebugMode) {
-      _logger.d('CityListManager: Loading cities from Hive.');
+      _logger.d('CityListManager: Loading cities from Hive. Current _citiesData count before load: ${_citiesData.length}');
     }
     final List<dynamic>? savedJsonList = _citiesBox.get('savedCities');
 
@@ -197,15 +195,21 @@ class CityListManager extends ChangeNotifier {
       }
       for (final dynamic jsonItem in savedJsonList) {
         try {
-          final Map<String, dynamic> cityMap = (jsonItem as Map).cast<String, dynamic>();
+          final Map<String, dynamic> cityMap = Map<String, dynamic>.from(jsonItem);
           final CityDisplayData cityDisplayData = CityDisplayData.fromJson(cityMap);
-          _citiesData.add(cityDisplayData);
+          // Only add if not already present (e.g., if current location was already added)
+          if (!_citiesData.any((existingData) => existingData.city == cityDisplayData.city)) {
+            _citiesData.add(cityDisplayData);
+          }
         } catch (e) {
           _logger.e('CityListManager: Error parsing saved city from Hive: $e, data: $jsonItem', error: e);
         }
       }
     } else {
       _logger.d('CityListManager: No saved cities found in Hive.');
+    }
+    if (kDebugMode) {
+      _logger.d('CityListManager: After _loadCitiesFromHive, final _citiesData count: ${_citiesData.length}');
     }
   }
 
@@ -320,7 +324,8 @@ class CityListManager extends ChangeNotifier {
           isLoading: true,
         ),
         isSaved: false,
-        hourlyForecasts: [], // Initialize empty list for new city
+        hourlyForecasts: [],
+        dailyForecasts: [],
       );
       _citiesData = List<CityDisplayData>.of(_citiesData)..add(newCityDisplayData);
       _selectedCity = city;
@@ -340,7 +345,7 @@ class CityListManager extends ChangeNotifier {
 
   void addCityToSavedList(City city) {
     if (kDebugMode) {
-      _logger.d('CityListManager: addCityToSavedList called for: ${city.name}');
+      _logger.d('CityListManager: addCityToSavedList called for: ${city.name}.');
     }
     final int index = _citiesData.indexWhere((CityDisplayData data) => data.city == city);
     if (index != -1 && !_citiesData[index].isSaved) {
@@ -436,11 +441,14 @@ class CityListManager extends ChangeNotifier {
 
     final DateTime nowUtc = DateTime.now().toUtc();
     final List<CityDisplayData> updatedList = _citiesData.map((CityDisplayData cityData) {
-      // Update the time for existing hourly forecasts
       final List<HourlyForecast>? updatedHourlyForecasts = cityData.hourlyForecasts?.map((forecast) {
-        // No change to forecast.time needed as it's already UTC and fixed for that forecast hour
         return forecast;
       }).toList();
+
+      final List<DailyForecast>? updatedDailyForecasts = cityData.dailyForecasts?.map((forecast) {
+        return forecast;
+      }).toList();
+
 
       final CityLiveInfo newLiveInfo = cityData.liveInfo.copyWith(
         currentTimeUtc: nowUtc,
@@ -458,7 +466,8 @@ class CityListManager extends ChangeNotifier {
       );
       return cityData.copyWith(
         liveInfo: newLiveInfo,
-        hourlyForecasts: Value(updatedHourlyForecasts), // Pass updated hourly forecasts
+        hourlyForecasts: Value(updatedHourlyForecasts),
+        dailyForecasts: Value(updatedDailyForecasts),
       );
     }).toList();
 
@@ -480,7 +489,8 @@ class CityListManager extends ChangeNotifier {
     _citiesData = _citiesData.map((CityDisplayData cityData) {
       return cityData.copyWith(
         liveInfo: cityData.liveInfo.copyWith(isLoading: true, error: Value(null)),
-        hourlyForecasts: Value(null), // Clear previous forecasts when loading new
+        hourlyForecasts: Value(null),
+        dailyForecasts: Value(null),
       );
     }).toList();
     _citiesDataController.add(UnmodifiableListView(_citiesData));
@@ -520,14 +530,15 @@ class CityListManager extends ChangeNotifier {
         error: null,
       );
 
-      // Extract hourly forecasts from the API response
       final List<HourlyForecast> hourlyForecasts = apiResponse['hourlyForecasts'] as List<HourlyForecast>;
+      final List<DailyForecast> dailyForecasts = apiResponse['dailyForecasts'] as List<DailyForecast>;
 
       final int index = _citiesData.indexWhere((CityDisplayData c) => c.city == city);
       if (index != -1) {
         final CityDisplayData updatedCityDisplayData = _citiesData[index].copyWith(
           liveInfo: newLiveInfo,
-          hourlyForecasts: Value(hourlyForecasts), // Update hourly forecasts
+          hourlyForecasts: Value(hourlyForecasts),
+          dailyForecasts: Value(dailyForecasts),
         );
         _citiesData = List<CityDisplayData>.of(_citiesData)..setAll(index, [updatedCityDisplayData]);
       }
@@ -551,7 +562,8 @@ class CityListManager extends ChangeNotifier {
         );
         final CityDisplayData updatedCityDisplayData = _citiesData[index].copyWith(
           liveInfo: errorLiveInfo,
-          hourlyForecasts: Value(null), // Clear forecasts on error
+          hourlyForecasts: Value(null),
+          dailyForecasts: Value(null),
         );
         _citiesData = List<CityDisplayData>.of(_citiesData)..setAll(index, [updatedCityDisplayData]);
       }

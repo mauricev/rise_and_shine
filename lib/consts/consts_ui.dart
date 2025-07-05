@@ -13,7 +13,8 @@ const String kWind = 'Wind:';
 const String kCondition = 'Condition:';
 const String kDescription = 'Description:';
 const String kHourlyForecastHeading = 'Hourly Forecast';
-const String kNoCityDataAvailableAfterFetch = 'No city data available. Please select or add a city.'; // NEW: Added missing constant
+const String kDailyForecastHeading = '8-Day Forecast'; // NEW: Daily Forecast Heading
+const String kNoCityDataAvailableAfterFetch = 'No city data available. Please select or add a city.';
 
 
 // City Selection Screen
@@ -33,5 +34,6 @@ const String kPleaseSelectAnotherCity = 'Please select another city.';
 const String kStartTypingToSearch = 'Start typing to search for cities.';
 const String kFoundCitiesHeading = 'Found Cities';
 const String kSavedCitiesHeading = 'Saved Cities';
-const String kSearchForACity = 'Search for a City'; // NEW: Added missing constant
-const String kNoCitiesFound = 'No cities found.'; // NEW: Added missing constant
+const String kSearchForACity = 'Search for a City';
+const String kNoCitiesFound = 'No cities found.';
+const String kLoadingWeatherForecast = 'Loading weather...';

@@ -3,7 +3,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:rise_and_shine/models/city.dart';
-import 'package:rise_and_shine/models/hourly_forecast.dart'; // NEW: Import HourlyForecast model
+import 'package:rise_and_shine/models/hourly_forecast.dart';
+import 'package:rise_and_shine/models/daily_forecast.dart'; // NEW: Import DailyForecast model
 import 'package:logger/logger.dart';
 import 'package:flutter/foundation.dart';
 
@@ -24,10 +25,10 @@ class OpenWeatherService {
   );
 
   Future<Map<String, dynamic>> fetchCityTimeAndWeather(City city) async {
-    // Changed exclude parameter to get 'hourly' data.
-    // We now exclude minutely, daily, and alerts.
+    // FIX: Changed exclude parameter to get 'hourly' AND 'daily' data.
+    // We now exclude minutely and alerts.
     final Uri uri = Uri.parse(
-        '$_oneCallBaseUrl?lat=${city.latitude}&lon=${city.longitude}&exclude=minutely,daily,alerts&appid=$_apiKey&units=metric');
+        '$_oneCallBaseUrl?lat=${city.latitude}&lon=${city.longitude}&exclude=minutely,alerts&appid=$_apiKey&units=metric');
 
     if (kDebugMode) {
       _logger.d('OpenWeatherService: Fetching weather from One Call API 3.0: $uri');
@@ -57,7 +58,6 @@ class OpenWeatherService {
         final String condition = firstWeatherCondition['main'] as String;
         final String description = firstWeatherCondition['description'] as String;
         final String weatherIconCode = firstWeatherCondition['icon'] as String;
-        // Timezone offset is at the root level of the One Call API response
         final int timezoneOffset = data['timezone_offset'] as int;
 
         // Parse hourly forecast data
@@ -73,6 +73,19 @@ class OpenWeatherService {
           }
         }
 
+        // NEW: Parse daily forecast data
+        List<DailyForecast> dailyForecasts = [];
+        if (data['daily'] != null) {
+          final List<dynamic> dailyDataList = data['daily'] as List<dynamic>;
+          // Take only the next 8 days (excluding current day which is usually index 0)
+          for (int i = 0; i < dailyDataList.length && i < 8; i++) {
+            dailyForecasts.add(DailyForecast.fromJson(dailyDataList[i] as Map<String, dynamic>));
+          }
+          if (kDebugMode) {
+            _logger.d('OpenWeatherService: Parsed ${dailyForecasts.length} daily forecasts.');
+          }
+        }
+
 
         final Map<String, dynamic> parsedData = {
           'temperatureCelsius': temperature,
@@ -84,7 +97,8 @@ class OpenWeatherService {
           'description': description,
           'weatherIconCode': weatherIconCode,
           'timezoneOffsetSeconds': timezoneOffset,
-          'hourlyForecasts': hourlyForecasts, // Include hourly forecasts in the returned map
+          'hourlyForecasts': hourlyForecasts,
+          'dailyForecasts': dailyForecasts, // NEW: Include daily forecasts in the returned map
         };
 
         if (kDebugMode) {
@@ -109,7 +123,6 @@ class OpenWeatherService {
   }
 
   Future<City?> reverseGeocode(double latitude, double longitude) async {
-    // limit=1 to get only the most relevant result
     final Uri uri = Uri.parse(
         '$_geocodingBaseUrl?lat=$latitude&lon=$longitude&limit=1&appid=$_apiKey');
 
@@ -137,7 +150,6 @@ class OpenWeatherService {
         final String country = cityData['country'] as String;
         final String? state = cityData['state'] as String?;
 
-        // For timezone offset, we use the One Call API 3.0
         final Uri timezoneUri = Uri.parse(
             '$_oneCallBaseUrl?lat=$latitude&lon=$longitude&exclude=current,minutely,hourly,daily,alerts&appid=$_apiKey');
         final http.Response timezoneResponse = await http.get(timezoneUri);

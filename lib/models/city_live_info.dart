@@ -1,9 +1,9 @@
 // lib/models/city_live_info.dart
 
-import 'package:intl/intl.dart'; // For date formatting
+import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 
-// FIX: Define the Value<T> class
 /// A wrapper for nullable values in copyWith methods to distinguish
 /// between null (meaning "don't change") and Value(null) (meaning "set to null").
 class Value<T> {
@@ -49,7 +49,7 @@ class CityLiveInfo {
     );
   }
 
-  // FIX: Corrected factory constructor to create CityLiveInfo from JSON
+  // Factory constructor to create CityLiveInfo from JSON
   factory CityLiveInfo.fromJson(Map<String, dynamic> json) {
     final Logger logger = Logger(
       printer: PrettyPrinter(
@@ -63,21 +63,23 @@ class CityLiveInfo {
     );
 
     try {
+      // FIX: Use Map<String, dynamic>.from for robustness if json is _Map<dynamic, dynamic>
+      final Map<String, dynamic> safeJson = Map<String, dynamic>.from(json);
       return CityLiveInfo(
-        currentTimeUtc: json['currentTimeUtc'] != null
-            ? DateTime.parse(json['currentTimeUtc'] as String).toUtc()
+        currentTimeUtc: safeJson['currentTimeUtc'] != null
+            ? DateTime.parse(safeJson['currentTimeUtc'] as String).toUtc()
             : null,
-        timezoneOffsetSeconds: json['timezoneOffsetSeconds'] as int,
-        temperatureCelsius: (json['temperatureCelsius'] as num?)?.toDouble(),
-        feelsLike: (json['feelsLike'] as num?)?.toDouble(),
-        humidity: json['humidity'] as int?,
-        windSpeed: (json['windSpeed'] as num?)?.toDouble(),
-        windDirection: json['windDirection'] as String?,
-        condition: json['condition'] as String?,
-        description: json['description'] as String?,
-        weatherIconCode: json['weatherIconCode'] as String?,
-        isLoading: json['isLoading'] as bool,
-        error: json['error'] as String?,
+        timezoneOffsetSeconds: safeJson['timezoneOffsetSeconds'] as int,
+        temperatureCelsius: (safeJson['temperatureCelsius'] as num?)?.toDouble(),
+        feelsLike: (safeJson['feelsLike'] as num?)?.toDouble(),
+        humidity: safeJson['humidity'] as int?,
+        windSpeed: (safeJson['windSpeed'] as num?)?.toDouble(),
+        windDirection: safeJson['windDirection'] as String?,
+        condition: safeJson['condition'] as String?,
+        description: safeJson['description'] as String?,
+        weatherIconCode: safeJson['weatherIconCode'] as String?,
+        isLoading: safeJson['isLoading'] as bool,
+        error: safeJson['error'] as String?,
       );
     } catch (e) {
       logger.e('CityLiveInfo: Error parsing JSON: $e, JSON: $json', error: e);
@@ -85,7 +87,7 @@ class CityLiveInfo {
     }
   }
 
-  // FIX: Corrected method to convert CityLiveInfo to JSON
+  // Method to convert CityLiveInfo to JSON
   Map<String, dynamic> toJson() {
     return {
       'currentTimeUtc': currentTimeUtc?.toIso8601String(),

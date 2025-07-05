@@ -1,21 +1,18 @@
 // lib/models/hourly_forecast.dart
-
-import 'package:logger/logger.dart'; // For logging
+import 'package:flutter/foundation.dart';
+import 'package:logger/logger.dart';
 
 class HourlyForecast {
   final DateTime time;
   final double temperatureCelsius;
   final String iconCode;
-  // Removed: final String description; // Description is no longer needed per hour
 
   HourlyForecast({
     required this.time,
     required this.temperatureCelsius,
     required this.iconCode,
-    // Removed: required this.description,
   });
 
-  // Factory constructor to create an HourlyForecast from JSON data
   factory HourlyForecast.fromJson(Map<String, dynamic> json) {
     final Logger logger = Logger(
       printer: PrettyPrinter(
@@ -29,47 +26,45 @@ class HourlyForecast {
     );
 
     try {
-      final int dt = json['dt'] as int;
+      // FIX: Use Map<String, dynamic>.from for robustness if json is _Map<dynamic, dynamic>
+      final Map<String, dynamic> safeJson = Map<String, dynamic>.from(json);
+      final int dt = safeJson['dt'] as int;
       final DateTime time = DateTime.fromMillisecondsSinceEpoch(dt * 1000, isUtc: true);
-      final double temperature = (json['temp'] as num).toDouble();
-      final String icon = (json['weather'] as List<dynamic>)[0]['icon'] as String;
-      // Removed: final String description = (json['weather'] as List<dynamic>)[0]['description'] as String;
+      final double temperature = (safeJson['temp'] as num).toDouble();
+      // FIX: Robustly cast the nested weather map
+      final Map<String, dynamic> weatherMap = Map<String, dynamic>.from((safeJson['weather'] as List<dynamic>)[0]);
+      final String icon = weatherMap['icon'] as String;
 
       return HourlyForecast(
         time: time,
         temperatureCelsius: temperature,
         iconCode: icon,
-        // Removed: description: description,
       );
     } catch (e) {
       logger.e('HourlyForecast: Error parsing JSON: $e, JSON: $json', error: e);
-      rethrow; // Re-throw to propagate the error
+      rethrow;
     }
   }
 
-  // Method to convert an HourlyForecast object to JSON (for Hive storage if needed later)
   Map<String, dynamic> toJson() {
     return {
-      'dt': time.millisecondsSinceEpoch ~/ 1000, // Convert DateTime to Unix timestamp
+      'dt': time.millisecondsSinceEpoch ~/ 1000,
       'temp': temperatureCelsius,
       'weather': [
-        {'icon': iconCode /* Removed: , 'description': description */}
+        {'icon': iconCode}
       ],
     };
   }
 
-  // copyWith method for immutability
   HourlyForecast copyWith({
     DateTime? time,
     double? temperatureCelsius,
     String? iconCode,
-    // Removed: String? description,
   }) {
     return HourlyForecast(
       time: time ?? this.time,
       temperatureCelsius: temperatureCelsius ?? this.temperatureCelsius,
       iconCode: iconCode ?? this.iconCode,
-      // Removed: description: description ?? this.description,
     );
   }
 }
