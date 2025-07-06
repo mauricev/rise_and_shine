@@ -1,6 +1,5 @@
 // lib/models/hourly_forecast.dart
-import 'package:flutter/foundation.dart';
-// REMOVED: import 'package:logger/logger.dart'; // No longer needed here
+
 import 'package:rise_and_shine/utils/app_logger.dart'; // NEW: Import the global logger
 
 

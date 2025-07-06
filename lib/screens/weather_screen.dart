@@ -292,7 +292,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-  Widget _HourlyForecastCardItem({
+  Widget _hourlyForecastCardItem({
     required DateTime localForecastTime,
     required String iconCode,
     required double temperatureCelsius,
@@ -327,7 +327,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-  Widget _DailyForecastRowItem({
+  Widget _dailyForecastRowItem({
     required DateTime localForecastDate,
     required String iconCode,
     required double minTemperatureCelsius,
@@ -440,7 +440,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 final DateTime localForecastTime = forecast.time.add(
                   Duration(seconds: selectedCityDisplayData.city.timezoneOffsetSeconds),
                 );
-                return _HourlyForecastCardItem(
+                return _hourlyForecastCardItem(
                   localForecastTime: localForecastTime,
                   iconCode: forecast.iconCode,
                   temperatureCelsius: forecast.temperatureCelsius,
@@ -480,7 +480,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                   final DateTime localForecastDate = forecast.time.add(
                     Duration(seconds: selectedCityDisplayData.city.timezoneOffsetSeconds),
                   );
-                  return _DailyForecastRowItem(
+                  return _dailyForecastRowItem(
                     localForecastDate: localForecastDate,
                     iconCode: forecast.iconCode,
                     minTemperatureCelsius: forecast.minTemperatureCelsius,
