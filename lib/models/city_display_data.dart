@@ -1,90 +1,63 @@
 // lib/models/city_display_data.dart
 
+// REMOVED: import 'package:flutter/foundation.dart'; // FIX: Removed unused import
 import 'package:rise_and_shine/models/city.dart';
-import 'package:rise_and_shine/models/city_live_info.dart';
-import 'package:rise_and_shine/models/hourly_forecast.dart';
-import 'package:rise_and_shine/models/daily_forecast.dart';
-import 'package:rise_and_shine/utils/app_logger.dart'; // NEW: Import the global logger
+import 'package:rise_and_shine/utils/app_logger.dart';
 
-
+// Simplified CityDisplayData for internal management within CityListManager
+// It now only tracks the City and its saved status.
 class CityDisplayData {
   final City city;
-  final CityLiveInfo liveInfo;
-  final bool isSaved;
-  final List<HourlyForecast>? hourlyForecasts;
-  final List<DailyForecast>? dailyForecasts;
+  bool isSaved; // Made mutable for internal CityListManager updates
 
   CityDisplayData({
     required this.city,
-    required this.liveInfo,
     this.isSaved = false,
-    this.hourlyForecasts,
-    this.dailyForecasts,
   });
 
+  // Factory constructor to create CityDisplayData from JSON (for Hive)
   factory CityDisplayData.fromJson(Map<String, dynamic> json) {
-    // REMOVED: final Logger logger = Logger(...); // No longer declared here
-
     try {
       final City city = City.fromJson(Map<String, dynamic>.from(json['city']));
-      final CityLiveInfo liveInfo = CityLiveInfo.fromJson(Map<String, dynamic>.from(json['liveInfo']));
       final bool isSaved = json['isSaved'] as bool;
-
-      List<HourlyForecast>? parsedHourlyForecasts;
-      if (json['hourlyForecasts'] != null) {
-        parsedHourlyForecasts = (json['hourlyForecasts'] as List<dynamic>)
-            .map((e) => HourlyForecast.fromJson(Map<String, dynamic>.from(e)))
-            .toList();
-      }
-
-      List<DailyForecast>? parsedDailyForecasts;
-      if (json['dailyForecasts'] != null) {
-        parsedDailyForecasts = (json['dailyForecasts'] as List<dynamic>)
-            .map((e) => DailyForecast.fromJson(Map<String, dynamic>.from(e)))
-            .toList();
-      }
 
       return CityDisplayData(
         city: city,
-        liveInfo: liveInfo,
         isSaved: isSaved,
-        hourlyForecasts: parsedHourlyForecasts,
-        dailyForecasts: parsedDailyForecasts,
       );
     } catch (e) {
-      logger.e('CityDisplayData: Error parsing JSON: $e, JSON: $json', error: e); // Use global logger
+      logger.e('CityDisplayData: Error parsing JSON: $e, JSON: $json', error: e);
       rethrow;
     }
   }
 
+  // Method to convert CityDisplayData to JSON (for Hive)
   Map<String, dynamic> toJson() {
     return {
       'city': city.toJson(),
-      'liveInfo': liveInfo.toJson(),
       'isSaved': isSaved,
-      'hourlyForecasts': hourlyForecasts?.map((e) => e.toJson()).toList(),
-      'dailyForecasts': dailyForecasts?.map((e) => e.toJson()).toList(),
     };
   }
 
-  // copyWith method for immutability
+  // copyWith method for immutability (if needed, but direct mutation might be simpler for 'isSaved')
   CityDisplayData copyWith({
     City? city,
-    CityLiveInfo? liveInfo,
     bool? isSaved,
-    Value<List<HourlyForecast>?>? hourlyForecasts,
-    Value<List<DailyForecast>?>? dailyForecasts,
   }) {
     return CityDisplayData(
       city: city ?? this.city,
-      liveInfo: liveInfo ?? this.liveInfo,
       isSaved: isSaved ?? this.isSaved,
-      hourlyForecasts: hourlyForecasts == null
-          ? this.hourlyForecasts
-          : hourlyForecasts.value,
-      dailyForecasts: dailyForecasts == null
-          ? this.dailyForecasts
-          : dailyForecasts.value,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+          other is CityDisplayData &&
+              runtimeType == other.runtimeType &&
+              city == other.city &&
+              isSaved == other.isSaved;
+
+  @override
+  int get hashCode => city.hashCode ^ isSaved.hashCode;
 }

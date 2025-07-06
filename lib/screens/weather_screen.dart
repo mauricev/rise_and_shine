@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:rise_and_shine/managers/city_list_manager.dart';
 import 'package:rise_and_shine/models/city.dart';
-import 'package:rise_and_shine/models/city_display_data.dart';
 import 'package:rise_and_shine/models/city_live_info.dart';
 import 'package:rise_and_shine/models/hourly_forecast.dart';
 import 'package:rise_and_shine/models/daily_forecast.dart';
@@ -15,7 +14,9 @@ import 'dart:math';
 import 'package:intl/intl.dart';
 import 'package:rise_and_shine/utils/app_logger.dart';
 import 'package:rise_and_shine/utils/weather_icons.dart';
-import 'package:rise_and_shine/widgets/toggle_button.dart'; // FIX: Changed import from unit_toggle_button.dart
+import 'package:rise_and_shine/widgets/toggle_button.dart';
+import 'package:rise_and_shine/managers/weather_manager.dart';
+import 'package:rise_and_shine/managers/unit_system_manager.dart';
 
 
 class WeatherScreen extends StatefulWidget {
@@ -30,9 +31,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
   Timer? _addedConfirmationTimer;
 
   late CityListManager _cityListManager;
-  bool _didInitialFetch = false;
+  late UnitSystemManager _unitSystemManager;
+  late WeatherManager _weatherManager;
 
-  bool _isMetricUnits = false; // State to manage the unit system (false for English, true for Metric)
+  bool _didInitialSetup = false;
 
   @override
   void initState() {
@@ -43,32 +45,17 @@ class _WeatherScreenState extends State<WeatherScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_didInitialFetch) {
-      _cityListManager = context.cityListManager;
-      logger.d('WeatherScreen: didChangeDependencies called. Manager initialized.');
-      _initializeManagerAndFetchCities(_cityListManager);
-      _didInitialFetch = true;
+    if (!_didInitialSetup) {
+      final appManagers = AppManagers.of(context);
+      _cityListManager = appManagers.cityListManager;
+      _unitSystemManager = appManagers.unitSystemManager;
+      _weatherManager = appManagers.weatherManager;
+
+      logger.d('WeatherScreen: didChangeDependencies called. Managers accessed.');
+
+      _didInitialSetup = true;
     } else {
-      logger.d('WeatherScreen: didChangeDependencies called again, initial fetch already triggered.');
-    }
-  }
-
-  Future<void> _initializeManagerAndFetchCities(CityListManager manager) async {
-    logger.d('WeatherScreen: _initializeManagerAndFetchCities started.');
-    try {
-      logger.d('WeatherScreen: Awaiting manager.initialized...');
-      await manager.initialized;
-      logger.d('WeatherScreen: manager.initialized completed.');
-
-      if (mounted) {
-        logger.d('WeatherScreen: Widget is mounted. Calling manager.fetchAvailableCities()...');
-        await manager.fetchAvailableCities();
-        logger.d('WeatherScreen: manager.fetchAvailableCities() completed.');
-      } else {
-        logger.d('WeatherScreen: Widget NOT mounted after manager initialization. Skipping fetch.');
-      }
-    } catch (e) {
-      logger.e('WeatherScreen: Error initializing manager or fetching cities: $e');
+      logger.d('WeatherScreen: didChangeDependencies called again, initial setup already triggered.');
     }
   }
 
@@ -101,6 +88,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
+        final unitSystemManager = AppManagers.of(context).unitSystemManager;
         return AlertDialog(
           title: const Text('Options'),
           content: Column(
@@ -108,23 +96,23 @@ class _WeatherScreenState extends State<WeatherScreen> {
             children: [
               const Text('Choose Unit System:'),
               const SizedBox(height: 16),
-              // FIX: Use the new ToggleButton widget with specific parameters
-              ToggleButton(
-                initialValue: _isMetricUnits,
-                onChanged: (bool newValue) {
-                  setState(() {
-                    _isMetricUnits = newValue;
-                  });
-                  logger.d('Unit system changed to Metric: $_isMetricUnits');
-                  // In a real app, you would save this preference and trigger a weather data refresh
-                  // with the new unit system. For now, it just updates local state.
+              ListenableBuilder(
+                listenable: unitSystemManager,
+                builder: (context, child) {
+                  return ToggleButton(
+                    initialValue: unitSystemManager.isMetricUnits,
+                    onChanged: (bool newValue) {
+                      unitSystemManager.toggleUnitSystem();
+                      logger.d('Unit system changed to Metric: ${unitSystemManager.isMetricUnits}');
+                    },
+                    leftLabel: 'English',
+                    rightLabel: 'Metric',
+                    activeColor: Colors.blueAccent,
+                    inactiveColor: Colors.green,
+                    activeTextColor: Colors.white,
+                    inactiveTextColor: Colors.blueGrey,
+                  );
                 },
-                leftLabel: 'English',
-                rightLabel: 'Metric',
-                activeColor: Colors.blueAccent, // Color for Metric side
-                inactiveColor: Colors.green, // Color for English side
-                activeTextColor: Colors.white, // Text color when its side is active
-                inactiveTextColor: Colors.blueGrey, // Text color when its side is inactive
               ),
             ],
           ),
@@ -141,7 +129,6 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-
   AppBar _buildAppBar() {
     return AppBar(
       title: const Text(kWeatherScreenTitle),
@@ -150,53 +137,33 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-  Widget _buildBodyContent(CityListManager manager) {
+  Widget _buildBodyContent(CityListManager cityListManager) {
     return ListenableBuilder(
-      listenable: manager,
+      listenable: cityListManager,
       builder: (BuildContext context, Widget? child) {
-        final City? selectedCity = manager.selectedCity;
-        final bool isLoadingCities = manager.isLoadingCities;
-        final String? citiesFetchError = manager.citiesFetchError;
+        final City? selectedCity = cityListManager.selectedCity;
 
-        if (isLoadingCities && selectedCity == null && manager.allCitiesDisplayData.isEmpty) {
-          logger.d('WeatherScreen: ListenableBuilder: Showing initial loading state (Manager loading with no data).');
-          return _buildLoadingCitiesState();
-        } else if (citiesFetchError != null) {
-          logger.d('WeatherScreen: ListenableBuilder: Showing cities fetch error state.');
-          return _buildErrorFetchingCitiesState(citiesFetchError, manager);
-        } else if (selectedCity == null) {
+        if (selectedCity == null) {
           logger.d('WeatherScreen: ListenableBuilder: No city selected, showing selection prompt.');
           return _buildNoCitySelectedState(context);
         }
 
-        logger.d('WeatherScreen: ListenableBuilder: Selected city is ${selectedCity.name}. Proceeding to StreamBuilder.');
-        return StreamBuilder<List<CityDisplayData>>(
-          stream: manager.citiesDataStream,
-          builder: (BuildContext context, AsyncSnapshot<List<CityDisplayData>> snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData && manager.isLoadingCities) {
-              logger.d('WeatherScreen: StreamBuilder: ConnectionState.waiting and no data, manager still loading. Showing progress indicator.');
-              return const Center(child: CircularProgressIndicator());
-            } else if (snapshot.hasError) {
-              logger.e('WeatherScreen: StreamBuilder: Snapshot has error: ${snapshot.error}');
-              return _buildWeatherErrorState(selectedCity, snapshot.error);
-            } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-              logger.d('WeatherScreen: StreamBuilder: No data or empty data. Checking further conditions.');
-              if (!manager.isLoadingCities && manager.selectedCity == null) {
-                logger.d('WeatherScreen: StreamBuilder: Manager not loading, no selected city. Showing selection prompt.');
-                return _buildNoCitySelectedState(context);
-              }
-              logger.d('WeatherScreen: StreamBuilder: Showing no city data available state.');
-              return _buildNoCityDataAvailableState();
+        logger.d('WeatherScreen: ListenableBuilder: Selected city is ${selectedCity.name}. Proceeding to StreamBuilder for weather.');
+        return StreamBuilder<Map<int, CityWeatherData>>(
+          stream: _weatherManager.weatherDataStream,
+          builder: (BuildContext context, AsyncSnapshot<Map<int, CityWeatherData>> snapshot) {
+            final CityWeatherData? cityWeatherData = snapshot.data?[selectedCity.hashCode];
+
+            if (cityWeatherData == null || cityWeatherData.liveInfo.isLoading) {
+              logger.d('WeatherScreen: StreamBuilder: Weather data for ${selectedCity.name} is null or loading. Showing progress.');
+              return _buildLoadingCitiesState(); // Re-using this for general loading
+            } else if (cityWeatherData.liveInfo.error != null) {
+              logger.e('WeatherScreen: StreamBuilder: Weather data for ${selectedCity.name} has error: ${cityWeatherData.liveInfo.error}');
+              return _buildErrorFetchingCitiesState(cityWeatherData.liveInfo.error!, cityListManager); // Re-using this for errors
             }
 
-            final CityDisplayData? selectedCityDisplayData = snapshot.data!
-                .firstWhereOrNull((CityDisplayData cityDisplay) => cityDisplay.city == selectedCity);
-
-            if (selectedCityDisplayData == null) {
-              logger.d('WeatherScreen: StreamBuilder: Selected city data not found in snapshot.');
-              return _buildSelectedCityNotFoundState(selectedCity);
-            }
-            return _buildMainWeatherCard(selectedCityDisplayData, manager);
+            logger.d('WeatherScreen: StreamBuilder: Displaying weather for ${selectedCity.name}.');
+            return _buildMainWeatherCard(cityWeatherData, cityListManager);
           },
         );
       },
@@ -254,6 +221,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
         ],
       );
     } else if (liveInfo.temperatureCelsius != null) {
+      final String tempUnit = _unitSystemManager.isMetricUnits ? '°C' : '°F';
       return Column(
         children: [
           Text(
@@ -273,10 +241,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
             ),
           const SizedBox(height: 8),
           Text(
-            // Display temperature based on _isMetricUnits
-            _isMetricUnits
-                ? '${liveInfo.temperatureCelsius!.toStringAsFixed(1)}°C'
-                : '${((liveInfo.temperatureCelsius! * 9 / 5) + 32).toStringAsFixed(1)}°F',
+            '${liveInfo.temperatureCelsius!.toStringAsFixed(1)}$tempUnit',
             style: const TextStyle(
               fontSize: 48,
               fontWeight: FontWeight.bold,
@@ -343,14 +308,12 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-  Widget _HourlyForecastCardItem({
+  Widget _buildHourlyForecastCardItem({
     required DateTime localForecastTime,
     required String iconCode,
     required double temperatureCelsius,
   }) {
-    // Convert temperature based on _isMetricUnits
-    final double displayTemperature = _isMetricUnits ? temperatureCelsius : ((temperatureCelsius * 9 / 5) + 32);
-    final String unitSymbol = _isMetricUnits ? '°C' : '°F';
+    final String unitSymbol = _unitSystemManager.isMetricUnits ? '°C' : '°F';
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
@@ -373,7 +336,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              '${displayTemperature.toStringAsFixed(0)}$unitSymbol',
+              '${temperatureCelsius.toStringAsFixed(0)}$unitSymbol',
               style: const TextStyle(fontSize: 16, color: Colors.green),
             ),
           ],
@@ -382,16 +345,13 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-  Widget _DailyForecastRowItem({
+  Widget _buildDailyForecastRowItem({
     required DateTime localForecastDate,
     required String iconCode,
     required double minTemperatureCelsius,
     required double maxTemperatureCelsius,
   }) {
-    // Convert temperatures based on _isMetricUnits
-    final double displayMinTemp = _isMetricUnits ? minTemperatureCelsius : ((minTemperatureCelsius * 9 / 5) + 32);
-    final double displayMaxTemp = _isMetricUnits ? maxTemperatureCelsius : ((maxTemperatureCelsius * 9 / 5) + 32);
-    final String unitSymbol = _isMetricUnits ? '°C' : '°F';
+    final String unitSymbol = _unitSystemManager.isMetricUnits ? '°C' : '°F';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       child: Row(
@@ -415,7 +375,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
           Expanded(
             flex: 2,
             child: Text(
-              '${displayMinTemp.toStringAsFixed(0)}$unitSymbol / ${displayMaxTemp.toStringAsFixed(0)}$unitSymbol',
+              '${minTemperatureCelsius.toStringAsFixed(0)}$unitSymbol / ${maxTemperatureCelsius.toStringAsFixed(0)}$unitSymbol',
               style: const TextStyle(fontSize: 16, color: Colors.blueGrey),
               textAlign: TextAlign.right,
             ),
@@ -426,18 +386,19 @@ class _WeatherScreenState extends State<WeatherScreen> {
   }
 
 
-  Widget _buildMainWeatherCard(CityDisplayData selectedCityDisplayData, CityListManager manager) {
-    final City selectedCity = selectedCityDisplayData.city;
-    final List<HourlyForecast>? rawHourlyForecasts = selectedCityDisplayData.hourlyForecasts;
-    final List<DailyForecast>? rawDailyForecasts = selectedCityDisplayData.dailyForecasts;
+  Widget _buildMainWeatherCard(CityWeatherData cityWeatherData, CityListManager cityListManager) {
+    final City selectedCity = cityWeatherData.city;
+    final CityLiveInfo liveInfo = cityWeatherData.liveInfo;
+    final List<HourlyForecast> rawHourlyForecasts = cityWeatherData.hourlyForecasts;
+    final List<DailyForecast> rawDailyForecasts = cityWeatherData.dailyForecasts;
 
     final List<HourlyForecast> displayHourlyForecasts =
-    (rawHourlyForecasts != null && rawHourlyForecasts.length > 1)
+    (rawHourlyForecasts.length > 1)
         ? rawHourlyForecasts.sublist(1, min(rawHourlyForecasts.length, 9))
         : [];
 
     final List<DailyForecast> displayDailyForecasts =
-    (rawDailyForecasts != null && rawDailyForecasts.length > 1)
+    (rawDailyForecasts.length > 1)
         ? rawDailyForecasts.sublist(1, min(rawDailyForecasts.length, 9))
         : [];
 
@@ -457,18 +418,18 @@ class _WeatherScreenState extends State<WeatherScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _buildCityName(selectedCityDisplayData.city.name),
+                      _buildCityName(selectedCity.name),
                       const SizedBox(height: 24),
-                      _buildWeatherStatus(selectedCityDisplayData.liveInfo),
+                      _buildWeatherStatus(liveInfo),
                     ],
                   ),
-                  _buildAddCityButton(selectedCity, manager),
+                  _buildAddCityButton(selectedCity, cityListManager),
                   Positioned(
                     left: 0,
                     bottom: 0,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 8.0, bottom: 8.0),
-                      child: _buildLocalTime(selectedCityDisplayData.liveInfo.formattedLocalTime),
+                      child: _buildLocalTime(liveInfo.formattedLocalTime),
                     ),
                   ),
                 ],
@@ -497,9 +458,9 @@ class _WeatherScreenState extends State<WeatherScreen> {
               itemBuilder: (context, index) {
                 final forecast = displayHourlyForecasts[index];
                 final DateTime localForecastTime = forecast.time.add(
-                  Duration(seconds: selectedCityDisplayData.city.timezoneOffsetSeconds),
+                  Duration(seconds: selectedCity.timezoneOffsetSeconds),
                 );
-                return _HourlyForecastCardItem(
+                return _buildHourlyForecastCardItem(
                   localForecastTime: localForecastTime,
                   iconCode: forecast.iconCode,
                   temperatureCelsius: forecast.temperatureCelsius,
@@ -537,9 +498,9 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 itemBuilder: (context, index) {
                   final forecast = displayDailyForecasts[index];
                   final DateTime localForecastDate = forecast.time.add(
-                    Duration(seconds: selectedCityDisplayData.city.timezoneOffsetSeconds),
+                    Duration(seconds: selectedCity.timezoneOffsetSeconds),
                   );
-                  return _DailyForecastRowItem(
+                  return _buildDailyForecastRowItem(
                     localForecastDate: localForecastDate,
                     iconCode: forecast.iconCode,
                     minTemperatureCelsius: forecast.minTemperatureCelsius,
@@ -622,6 +583,11 @@ class _WeatherScreenState extends State<WeatherScreen> {
               style: const TextStyle(color: Colors.red, fontSize: 16),
               textAlign: TextAlign.center,
             ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => _weatherManager.fetchWeatherForCities(manager.allCities),
+              child: const Text(kRetryFetchCities),
+            ),
           ],
         ),
       ),
@@ -651,46 +617,6 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-  Widget _buildWeatherErrorState(City selectedCity, Object? error) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 50),
-            const SizedBox(height: 10),
-            Text(
-              '$kErrorLoadingCities ${selectedCity.name}: $error',
-              style: const TextStyle(color: Colors.red, fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNoCityDataAvailableState() {
-    return const Center(
-      child: Text(
-        kNoCityDataAvailableAfterFetch,
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 16, color: Colors.grey),
-      ),
-    );
-  }
-
-  Widget _buildSelectedCityNotFoundState(City selectedCity) {
-    return Center(
-      child: Text(
-        '$kDataNotFoundForCity ${selectedCity.name}. $kPleaseSelectAnotherCity',
-        textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 16, color: Colors.grey),
-      ),
-    );
-  }
-
   Widget _buildDetailText(String label, String value) {
     return Text(
       '$label $value',
@@ -700,18 +626,15 @@ class _WeatherScreenState extends State<WeatherScreen> {
   }
 
   Widget _buildWeatherDetailsText(CityLiveInfo liveInfo) {
-    // Convert feelsLike and windSpeed based on _isMetricUnits
-    final double displayFeelsLike = _isMetricUnits ? liveInfo.feelsLike! : ((liveInfo.feelsLike! * 9 / 5) + 32);
-    final double displayWindSpeed = _isMetricUnits ? liveInfo.windSpeed! : (liveInfo.windSpeed! * 2.23694); // m/s to mph
-    final String tempUnit = _isMetricUnits ? '°C' : '°F';
-    final String speedUnit = _isMetricUnits ? 'm/s' : 'mph';
+    final String tempUnit = _unitSystemManager.isMetricUnits ? '°C' : '°F';
+    final String speedUnit = _unitSystemManager.isMetricUnits ? 'm/s' : 'mph';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildDetailText(kFeelsLike, '${displayFeelsLike.toStringAsFixed(1)}$tempUnit'),
+        _buildDetailText(kFeelsLike, '${liveInfo.feelsLike!.toStringAsFixed(1)}$tempUnit'),
         _buildDetailText(kHumidity, '${liveInfo.humidity!}%'),
-        _buildDetailText(kWind, '${displayWindSpeed.toStringAsFixed(1)} $speedUnit ${liveInfo.windDirection}'),
+        _buildDetailText(kWind, '${liveInfo.windSpeed!.toStringAsFixed(1)} $speedUnit ${liveInfo.windDirection}'),
       ],
     );
   }
@@ -719,11 +642,9 @@ class _WeatherScreenState extends State<WeatherScreen> {
   @override
   Widget build(BuildContext context) {
     logger.d('WeatherScreen: build called.');
-    final CityListManager manager = _cityListManager;
-
     return Scaffold(
       appBar: _buildAppBar(),
-      body: _buildBodyContent(manager),
+      body: _buildBodyContent(AppManagers.of(context).cityListManager),
     );
   }
 }

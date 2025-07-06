@@ -6,8 +6,10 @@ import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/models/city_display_data.dart';
 import 'package:rise_and_shine/providers/app_managers_provider.dart';
 import 'package:rise_and_shine/consts/consts_ui.dart';
-import 'package:rise_and_shine/utils/app_logger.dart'; // Import global logger
-import 'package:rise_and_shine/utils/weather_icons.dart'; // NEW: Import global weather icon utility
+import 'package:rise_and_shine/utils/app_logger.dart';
+import 'package:rise_and_shine/utils/weather_icons.dart';
+import 'package:rise_and_shine/managers/weather_manager.dart';
+import 'package:rise_and_shine/managers/unit_system_manager.dart';
 
 
 class CitySelectionScreen extends StatefulWidget {
@@ -23,6 +25,8 @@ class _CitySelectionScreenState extends State<CitySelectionScreen> {
   bool _showSearchResults = false;
 
   late CityListManager _cityListManager;
+  late UnitSystemManager _unitSystemManager;
+  late WeatherManager _weatherManager;
 
   @override
   void initState() {
@@ -34,8 +38,11 @@ class _CitySelectionScreenState extends State<CitySelectionScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _cityListManager = context.cityListManager;
-    logger.d('CitySelectionScreen: didChangeDependencies called. Manager initialized.');
+    final appManagers = AppManagers.of(context);
+    _cityListManager = appManagers.cityListManager;
+    _unitSystemManager = appManagers.unitSystemManager;
+    _weatherManager = appManagers.weatherManager;
+    logger.d('CitySelectionScreen: didChangeDependencies called. Managers accessed.');
   }
 
   void _onSearchChanged() {
@@ -113,7 +120,7 @@ class _CitySelectionScreenState extends State<CitySelectionScreen> {
     );
   }
 
-  Widget _buildCityList(List<CityDisplayData> cities, bool isSavedList) {
+  Widget _buildCityList(List<City> cities, bool isSavedList) {
     if (cities.isEmpty) {
       return Center(
         child: Padding(
@@ -132,83 +139,104 @@ class _CitySelectionScreenState extends State<CitySelectionScreen> {
       physics: const NeverScrollableScrollPhysics(),
       itemCount: cities.length,
       itemBuilder: (context, index) {
-        final CityDisplayData cityDisplayData = cities[index];
-        final City city = cityDisplayData.city;
+        final City city = cities[index];
         final bool isSelected = city == _cityListManager.selectedCity;
+        final bool isSaved = _cityListManager.isCitySaved(city);
 
-        return Dismissible(
-          key: ValueKey(city.name + city.country),
-          direction: DismissDirection.endToStart,
-          confirmDismiss: (direction) async {
-            if (direction == DismissDirection.endToStart) {
-              if (cityDisplayData.isSaved) {
-                return Future.value(true);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Only saved cities can be removed by swiping.')),
-                );
-                return Future.value(false);
+        return ListenableBuilder(
+          listenable: Listenable.merge([_weatherManager, _unitSystemManager]),
+          builder: (context, child) {
+            final CityWeatherData? cityWeatherData = _weatherManager.getWeatherForCity(city);
+            final bool isMetric = _unitSystemManager.isMetricUnits;
+
+            String temperatureText = kLoadingWeatherForecast;
+            String iconEmoji = '';
+            bool hasError = false;
+            bool isLoadingWeather = true;
+
+            if (cityWeatherData != null) {
+              isLoadingWeather = cityWeatherData.liveInfo.isLoading;
+              if (cityWeatherData.liveInfo.error != null) {
+                hasError = true;
+                temperatureText = 'Error';
+              } else if (cityWeatherData.liveInfo.temperatureCelsius != null) {
+                temperatureText = '${cityWeatherData.liveInfo.temperatureCelsius!.toStringAsFixed(0)}°${isMetric ? 'C' : 'F'}';
+                iconEmoji = getWeatherEmoji(cityWeatherData.liveInfo.weatherIconCode!);
               }
             }
-            return Future.value(false);
-          },
-          onDismissed: (direction) {
-            if (direction == DismissDirection.endToStart) {
-              _removeCity(city);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('${city.name} dismissed')),
-              );
-            }
-          },
-          background: Container(
-            color: Colors.red,
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-            child: const Icon(Icons.delete, color: Colors.white),
-          ),
-          child: Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            elevation: 4,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              title: Text(
-                city.name,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  color: isSelected ? Colors.blueAccent : Colors.black87,
+
+            return Dismissible(
+              key: ValueKey(city.name + city.country),
+              direction: DismissDirection.endToStart,
+              confirmDismiss: (direction) async {
+                if (direction == DismissDirection.endToStart) {
+                  if (isSaved) {
+                    return Future.value(true);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Only saved cities can be removed by swiping.')),
+                    );
+                    return Future.value(false);
+                  }
+                }
+                return Future.value(false);
+              },
+              onDismissed: (direction) {
+                if (direction == DismissDirection.endToStart) {
+                  _removeCity(city);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('${city.name} dismissed')),
+                  );
+                }
+              },
+              background: Container(
+                color: Colors.red,
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: const Icon(Icons.delete, color: Colors.white),
+              ),
+              child: Card(
+                margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  title: Text(
+                    city.name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: isSelected ? Colors.blueAccent : Colors.black87,
+                    ),
+                  ),
+                  subtitle: Text(
+                    city.state != null ? '${city.state}, ${city.country}' : city.country,
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isLoadingWeather)
+                        const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      else if (hasError)
+                        const Icon(Icons.error, color: Colors.red)
+                      else if (iconEmoji.isNotEmpty)
+                          Text(
+                            iconEmoji,
+                            style: const TextStyle(fontSize: 24),
+                          ),
+                      const SizedBox(width: 8),
+                      Text(
+                        temperatureText,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  onTap: () => _selectCityAndNavigate(city),
                 ),
               ),
-              subtitle: Text(
-                city.state != null ? '${city.state}, ${city.country}' : city.country,
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-              trailing: Row( // NEW: Use a Row to hold both icon and temperature
-                mainAxisSize: MainAxisSize.min, // Ensure row only takes minimum space
-                children: [
-                  if (cityDisplayData.liveInfo.isLoading)
-                    const SizedBox(
-                        width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  else if (cityDisplayData.liveInfo.error != null)
-                    const Icon(Icons.error, color: Colors.red)
-                  else if (cityDisplayData.liveInfo.weatherIconCode != null) // NEW: Display icon if available
-                      Text(
-                        getWeatherEmoji(cityDisplayData.liveInfo.weatherIconCode!), // Use global function
-                        style: const TextStyle(fontSize: 24), // Adjust icon size
-                      ),
-                  const SizedBox(width: 8), // Spacing between icon and temperature
-                  Text(
-                    cityDisplayData.liveInfo.temperatureCelsius != null
-                        ? '${cityDisplayData.liveInfo.temperatureCelsius!.toStringAsFixed(0)}°C'
-                        : kLoadingWeatherForecast,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              onTap: () => _selectCityAndNavigate(city),
-            ),
-          ),
+            );
+          },
         );
       },
     );
@@ -222,26 +250,29 @@ class _CitySelectionScreenState extends State<CitySelectionScreen> {
       body: Column(
         children: [
           _buildSearchField(),
-          if (_cityListManager.isSearchingCities)
-            const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: CircularProgressIndicator(),
-            )
-          else if (_searchController.text.isNotEmpty && _searchResults.isEmpty && _cityListManager.searchCitiesError == null)
-            const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: Text(kNoSearchResults),
-            )
-          else if (_cityListManager.searchCitiesError != null)
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text(
-                  'Search Error: ${_cityListManager.searchCitiesError}',
-                  style: const TextStyle(color: Colors.red),
-                ),
-              )
-            else if (_showSearchResults)
-                Expanded(
+          ListenableBuilder(
+            listenable: _cityListManager,
+            builder: (context, child) {
+              if (_cityListManager.isSearchingCities) {
+                return const Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: CircularProgressIndicator(),
+                );
+              } else if (_searchController.text.isNotEmpty && _searchResults.isEmpty && _cityListManager.searchCitiesError == null) {
+                return const Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Text(kNoSearchResults),
+                );
+              } else if (_cityListManager.searchCitiesError != null) {
+                return Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    'Search Error: ${_cityListManager.searchCitiesError}',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                );
+              } else if (_showSearchResults) {
+                return Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -272,43 +303,31 @@ class _CitySelectionScreenState extends State<CitySelectionScreen> {
                       ),
                     ],
                   ),
-                )
-              else
-                Expanded(
-                  child: ListenableBuilder(
-                    listenable: _cityListManager,
-                    builder: (context, child) {
-                      final List<CityDisplayData> savedCities = _cityListManager.allCitiesDisplayData
-                          .where((data) => data.isSaved)
-                          .toList();
-                      final CityDisplayData? currentUnsavedCity = _cityListManager.allCitiesDisplayData
-                          .firstWhereOrNull((data) => !data.isSaved && data.city == _cityListManager.selectedCity);
+                );
+              } else {
+                final List<City> displayCities = _cityListManager.allCities;
 
-                      List<CityDisplayData> displayCities = [];
-                      if (currentUnsavedCity != null) {
-                        displayCities.add(currentUnsavedCity);
-                      }
-                      displayCities.addAll(savedCities);
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (displayCities.isNotEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                              child: Text(
-                                kSavedCitiesHeading,
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          Expanded(
-                            child: _buildCityList(displayCities, true),
+                return Expanded( // FIX: Removed misplaced semicolon here
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (displayCities.isNotEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                          child: Text(
+                            kSavedCitiesHeading,
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                           ),
-                        ],
-                      );
-                    },
+                        ),
+                      Expanded(
+                        child: _buildCityList(displayCities, true),
+                      ),
+                    ],
                   ),
-                ),
+                );
+              }
+            },
+          ),
         ],
       ),
     );
