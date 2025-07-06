@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:rise_and_shine/managers/city_list_manager.dart';
 import 'package:rise_and_shine/models/city.dart';
-import 'package:rise_and_shine/models/city_display_data.dart'; // FIX: Added missing semicolon
+import 'package:rise_and_shine/models/city_display_data.dart';
 import 'package:rise_and_shine/models/city_live_info.dart';
 import 'package:rise_and_shine/models/hourly_forecast.dart';
 import 'package:rise_and_shine/models/daily_forecast.dart';
@@ -15,6 +15,7 @@ import 'dart:math';
 import 'package:intl/intl.dart';
 import 'package:rise_and_shine/utils/app_logger.dart';
 import 'package:rise_and_shine/utils/weather_icons.dart';
+import 'package:rise_and_shine/widgets/toggle_button.dart'; // FIX: Changed import from unit_toggle_button.dart
 
 
 class WeatherScreen extends StatefulWidget {
@@ -30,6 +31,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   late CityListManager _cityListManager;
   bool _didInitialFetch = false;
+
+  bool _isMetricUnits = false; // State to manage the unit system (false for English, true for Metric)
 
   @override
   void initState() {
@@ -93,6 +96,51 @@ class _WeatherScreenState extends State<WeatherScreen> {
       }
     });
   }
+
+  void _showOptionsDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Options'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Choose Unit System:'),
+              const SizedBox(height: 16),
+              // FIX: Use the new ToggleButton widget with specific parameters
+              ToggleButton(
+                initialValue: _isMetricUnits,
+                onChanged: (bool newValue) {
+                  setState(() {
+                    _isMetricUnits = newValue;
+                  });
+                  logger.d('Unit system changed to Metric: $_isMetricUnits');
+                  // In a real app, you would save this preference and trigger a weather data refresh
+                  // with the new unit system. For now, it just updates local state.
+                },
+                leftLabel: 'English',
+                rightLabel: 'Metric',
+                activeColor: Colors.blueAccent, // Color for Metric side
+                inactiveColor: Colors.green, // Color for English side
+                activeTextColor: Colors.white, // Text color when its side is active
+                inactiveTextColor: Colors.blueGrey, // Text color when its side is inactive
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Close'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
 
   AppBar _buildAppBar() {
     return AppBar(
@@ -225,7 +273,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
             ),
           const SizedBox(height: 8),
           Text(
-            '${liveInfo.temperatureCelsius!.toStringAsFixed(1)}°C',
+            // Display temperature based on _isMetricUnits
+            _isMetricUnits
+                ? '${liveInfo.temperatureCelsius!.toStringAsFixed(1)}°C'
+                : '${((liveInfo.temperatureCelsius! * 9 / 5) + 32).toStringAsFixed(1)}°F',
             style: const TextStyle(
               fontSize: 48,
               fontWeight: FontWeight.bold,
@@ -292,11 +343,15 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-  Widget _hourlyForecastCardItem({
+  Widget _HourlyForecastCardItem({
     required DateTime localForecastTime,
     required String iconCode,
     required double temperatureCelsius,
   }) {
+    // Convert temperature based on _isMetricUnits
+    final double displayTemperature = _isMetricUnits ? temperatureCelsius : ((temperatureCelsius * 9 / 5) + 32);
+    final String unitSymbol = _isMetricUnits ? '°C' : '°F';
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -318,7 +373,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              '${temperatureCelsius.toStringAsFixed(0)}°C',
+              '${displayTemperature.toStringAsFixed(0)}$unitSymbol',
               style: const TextStyle(fontSize: 16, color: Colors.green),
             ),
           ],
@@ -327,12 +382,16 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-  Widget _dailyForecastRowItem({
+  Widget _DailyForecastRowItem({
     required DateTime localForecastDate,
     required String iconCode,
     required double minTemperatureCelsius,
     required double maxTemperatureCelsius,
   }) {
+    // Convert temperatures based on _isMetricUnits
+    final double displayMinTemp = _isMetricUnits ? minTemperatureCelsius : ((minTemperatureCelsius * 9 / 5) + 32);
+    final double displayMaxTemp = _isMetricUnits ? maxTemperatureCelsius : ((maxTemperatureCelsius * 9 / 5) + 32);
+    final String unitSymbol = _isMetricUnits ? '°C' : '°F';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       child: Row(
@@ -356,7 +415,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
           Expanded(
             flex: 2,
             child: Text(
-              '${minTemperatureCelsius.toStringAsFixed(0)}°C / ${maxTemperatureCelsius.toStringAsFixed(0)}°C',
+              '${displayMinTemp.toStringAsFixed(0)}$unitSymbol / ${displayMaxTemp.toStringAsFixed(0)}$unitSymbol',
               style: const TextStyle(fontSize: 16, color: Colors.blueGrey),
               textAlign: TextAlign.right,
             ),
@@ -440,7 +499,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 final DateTime localForecastTime = forecast.time.add(
                   Duration(seconds: selectedCityDisplayData.city.timezoneOffsetSeconds),
                 );
-                return _hourlyForecastCardItem(
+                return _HourlyForecastCardItem(
                   localForecastTime: localForecastTime,
                   iconCode: forecast.iconCode,
                   temperatureCelsius: forecast.temperatureCelsius,
@@ -480,7 +539,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                   final DateTime localForecastDate = forecast.time.add(
                     Duration(seconds: selectedCityDisplayData.city.timezoneOffsetSeconds),
                   );
-                  return _dailyForecastRowItem(
+                  return _DailyForecastRowItem(
                     localForecastDate: localForecastDate,
                     iconCode: forecast.iconCode,
                     minTemperatureCelsius: forecast.minTemperatureCelsius,
@@ -525,9 +584,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   Widget _buildOptionsButton() {
     return TextButton(
-      onPressed: () {
-        logger.d('Options button tapped! (Functionality not yet implemented)');
-      },
+      onPressed: _showOptionsDialog,
       style: TextButton.styleFrom(
         foregroundColor: Colors.grey.shade700,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -643,12 +700,18 @@ class _WeatherScreenState extends State<WeatherScreen> {
   }
 
   Widget _buildWeatherDetailsText(CityLiveInfo liveInfo) {
+    // Convert feelsLike and windSpeed based on _isMetricUnits
+    final double displayFeelsLike = _isMetricUnits ? liveInfo.feelsLike! : ((liveInfo.feelsLike! * 9 / 5) + 32);
+    final double displayWindSpeed = _isMetricUnits ? liveInfo.windSpeed! : (liveInfo.windSpeed! * 2.23694); // m/s to mph
+    final String tempUnit = _isMetricUnits ? '°C' : '°F';
+    final String speedUnit = _isMetricUnits ? 'm/s' : 'mph';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildDetailText(kFeelsLike, '${liveInfo.feelsLike!.toStringAsFixed(1)}°C'),
+        _buildDetailText(kFeelsLike, '${displayFeelsLike.toStringAsFixed(1)}$tempUnit'),
         _buildDetailText(kHumidity, '${liveInfo.humidity!}%'),
-        _buildDetailText(kWind, '${liveInfo.windSpeed!.toStringAsFixed(1)} m/s ${liveInfo.windDirection}'),
+        _buildDetailText(kWind, '${displayWindSpeed.toStringAsFixed(1)} $speedUnit ${liveInfo.windDirection}'),
       ],
     );
   }
