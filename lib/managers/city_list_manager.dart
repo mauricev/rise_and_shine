@@ -11,8 +11,9 @@ import 'package:rise_and_shine/models/daily_forecast.dart';
 import '../services/open_weather_service.dart';
 import '../services/search_cities_service.dart';
 import '../services/location_service.dart';
-import 'package:logger/logger.dart';
-import 'package:hive_ce_flutter/adapters.dart'; // Keep this for Hive functionality
+// REMOVED: import 'package:logger/logger.dart'; // No longer needed here
+import 'package:rise_and_shine/utils/app_logger.dart'; // NEW: Import the global logger
+import 'package:hive_ce_flutter/adapters.dart';
 
 
 class CityListManager extends ChangeNotifier {
@@ -51,16 +52,7 @@ class CityListManager extends ChangeNotifier {
   Timer? _timeUpdateTimer;
   Timer? _weatherUpdateTimer;
 
-  final Logger _logger = Logger(
-    printer: PrettyPrinter(
-      methodCount: 0,
-      errorMethodCount: 5,
-      lineLength: 120,
-      colors: true,
-      printEmojis: true,
-      dateTimeFormat: DateTimeFormat.onlyTime,
-    ),
-  );
+  // REMOVED: final Logger _logger = Logger(...); // No longer declared here
 
   final Completer<void> _initCompleter = Completer<void>();
   Future<void> get initialized => _initCompleter.future;
@@ -78,10 +70,10 @@ class CityListManager extends ChangeNotifier {
 
     manager._initializeManager().then((_) {
       manager._initCompleter.complete();
-      manager._logger.d('CityListManager: Initialization completed successfully.');
+      logger.d('CityListManager: Initialization completed successfully.'); // Use global logger
     }).catchError((e) {
       manager._initCompleter.completeError(e);
-      manager._logger.e('CityListManager: Initialization failed: $e', error: e);
+      logger.e('CityListManager: Initialization failed: $e', error: e); // Use global logger
     });
 
     return manager;
@@ -105,34 +97,33 @@ class CityListManager extends ChangeNotifier {
     _searchCitiesError = null;
 
     if (kDebugMode) {
-      _logger.d('CityListManager: _initializeManager started.');
+      logger.d('CityListManager: _initializeManager started.'); // Use global logger
     }
 
     try {
       if (!Hive.isBoxOpen(_citiesBoxName)) {
         _citiesBox = await Hive.openBox(_citiesBoxName);
-        _logger.d('CityListManager: Hive box "$_citiesBoxName" opened.');
+        logger.d('CityListManager: Hive box "$_citiesBoxName" opened.'); // Use global logger
       } else {
         _citiesBox = Hive.box(_citiesBoxName);
-        _logger.d('CityListManager: Hive box "$_citiesBoxName" already open.');
+        logger.d('CityListManager: Hive box "$_citiesBoxName" already open.'); // Use global logger
       }
 
       City? currentLocationCity;
       try {
         currentLocationCity = await _locationService.getCurrentCityLocation();
         if (currentLocationCity != null) {
-          _logger.d('CityListManager: Detected current location: ${currentLocationCity.name}, ${currentLocationCity.country}');
+          logger.d('CityListManager: Detected current location: ${currentLocationCity.name}, ${currentLocationCity.country}'); // Use global logger
         } else {
-          _logger.d('CityListManager: Could not detect current location via LocationService.');
+          logger.d('CityListManager: Could not detect current location via LocationService.'); // Use global logger
         }
       } catch (e) {
-        _logger.e('CityListManager: Error getting current location from LocationService: $e', error: e);
+        logger.e('CityListManager: Error getting current location from LocationService: $e', error: e); // Use global logger
         currentLocationCity = null;
       }
 
-      // FIX: Prioritize current location if found
       if (currentLocationCity != null) {
-        _logger.d('CityListManager: Attempting to use current location: ${currentLocationCity.name}');
+        logger.d('CityListManager: Attempting to use current location: ${currentLocationCity.name}'); // Use global logger
         final CityDisplayData newCityDisplayData = CityDisplayData(
           city: currentLocationCity,
           liveInfo: CityLiveInfo(
@@ -140,40 +131,36 @@ class CityListManager extends ChangeNotifier {
             timezoneOffsetSeconds: currentLocationCity.timezoneOffsetSeconds,
             isLoading: true,
           ),
-          isSaved: false, // Current location is initially unsaved
+          isSaved: false,
           hourlyForecasts: [],
           dailyForecasts: [],
         );
-        // Insert current location at the beginning of the list
         _citiesData = List<CityDisplayData>.of(_citiesData)..insert(0, newCityDisplayData);
         _selectedCity = currentLocationCity;
-        _logger.d('CityListManager: Added current location as selected city: ${currentLocationCity.name}.');
+        logger.d('CityListManager: Added current location as selected city: ${currentLocationCity.name}.'); // Use global logger
       }
 
-      // Now load saved cities. If current location was added, it's at index 0.
-      _loadCitiesFromHive(); // This will add saved cities to _citiesData
+      _loadCitiesFromHive();
 
-      // If no current location was found or if _citiesData is still empty after loading saved cities,
-      // then try to select the first saved city if any exist.
       if (_selectedCity == null && _citiesData.isNotEmpty) {
         _selectedCity = _citiesData.first.city;
-        _logger.d('CityListManager: No current location, selected first loaded city: ${_selectedCity!.name}');
+        logger.d('CityListManager: No current location, selected first loaded city: ${_selectedCity!.name}'); // Use global logger
       } else if (_selectedCity == null && _citiesData.isEmpty) {
-        _logger.d('CityListManager: No saved cities and no current location detected. App starts with no city selected.');
+        logger.d('CityListManager: No saved cities and no current location detected. App starts with no city selected.'); // Use global logger
       }
 
 
       if (kDebugMode) {
-        _logger.d('CityListManager: Final _citiesData before adding to controller: ${_citiesData.length} cities.');
+        logger.d('CityListManager: Final _citiesData before adding to controller: ${_citiesData.length} cities.'); // Use global logger
         for (var data in _citiesData) {
-          _logger.d('  - Final list: ${data.city.name} (Saved: ${data.isSaved}, Selected: ${data.city == _selectedCity})');
+          logger.d('  - Final list: ${data.city.name} (Saved: ${data.isSaved}, Selected: ${data.city == _selectedCity})'); // Use global logger
         }
       }
 
       _citiesDataController.add(UnmodifiableListView(_citiesData));
       if (hasListeners) notifyListeners();
     } catch (e) {
-      _logger.e('CityListManager: Error initializing Hive or loading cities: $e', error: e);
+      logger.e('CityListManager: Error initializing Hive or loading cities: $e', error: e); // Use global logger
       _citiesFetchError = 'Failed to initialize app data: ${e.toString()}';
       if (hasListeners) notifyListeners();
       rethrow;
@@ -181,41 +168,38 @@ class CityListManager extends ChangeNotifier {
   }
 
   void _loadCitiesFromHive() {
-    // This method is now called *after* attempting to get current location.
-    // It should add saved cities to _citiesData without overriding the current location if present.
-    _citiesData = _citiesData.where((data) => data.city == _selectedCity && !data.isSaved).toList(); // Keep selected unsaved city if it exists
+    _citiesData = _citiesData.where((data) => data.city == _selectedCity && !data.isSaved).toList();
     if (kDebugMode) {
-      _logger.d('CityListManager: Loading cities from Hive. Current _citiesData count before load: ${_citiesData.length}');
+      logger.d('CityListManager: Loading cities from Hive. Current _citiesData count before load: ${_citiesData.length}'); // Use global logger
     }
     final List<dynamic>? savedJsonList = _citiesBox.get('savedCities');
 
     if (savedJsonList != null) {
       if (kDebugMode) {
-        _logger.d('CityListManager: Found ${savedJsonList.length} cities in Hive.');
+        logger.d('CityListManager: Found ${savedJsonList.length} cities in Hive.'); // Use global logger
       }
       for (final dynamic jsonItem in savedJsonList) {
         try {
           final Map<String, dynamic> cityMap = Map<String, dynamic>.from(jsonItem);
           final CityDisplayData cityDisplayData = CityDisplayData.fromJson(cityMap);
-          // Only add if not already present (e.g., if current location was already added)
           if (!_citiesData.any((existingData) => existingData.city == cityDisplayData.city)) {
             _citiesData.add(cityDisplayData);
           }
         } catch (e) {
-          _logger.e('CityListManager: Error parsing saved city from Hive: $e, data: $jsonItem', error: e);
+          logger.e('CityListManager: Error parsing saved city from Hive: $e, data: $jsonItem', error: e); // Use global logger
         }
       }
     } else {
-      _logger.d('CityListManager: No saved cities found in Hive.');
+      logger.d('CityListManager: No saved cities found in Hive.'); // Use global logger
     }
     if (kDebugMode) {
-      _logger.d('CityListManager: After _loadCitiesFromHive, final _citiesData count: ${_citiesData.length}');
+      logger.d('CityListManager: After _loadCitiesFromHive, final _citiesData count: ${_citiesData.length}'); // Use global logger
     }
   }
 
   Future<void> _saveCitiesToHive() async {
     if (kDebugMode) {
-      _logger.d('CityListManager: Saving cities to Hive.');
+      logger.d('CityListManager: Saving cities to Hive.'); // Use global logger
     }
     final List<Map<String, dynamic>> citiesToSave = _citiesData
         .where((data) => data.isSaved)
@@ -224,18 +208,44 @@ class CityListManager extends ChangeNotifier {
 
     try {
       await _citiesBox.put('savedCities', citiesToSave);
-      _logger.d('CityListManager: Successfully saved ${citiesToSave.length} cities to Hive.');
+      logger.d('CityListManager: Successfully saved ${citiesToSave.length} cities to Hive.'); // Use global logger
     } catch (e) {
-      _logger.e('CityListManager: Error saving cities to Hive: $e', error: e);
+      logger.e('CityListManager: Error saving cities to Hive: $e', error: e); // Use global logger
+    }
+  }
+
+  void removeCity(City cityToRemove) {
+    logger.d('CityListManager: removeCity called for: ${cityToRemove.name}'); // Use global logger
+    final int initialCount = _citiesData.length;
+    _citiesData.removeWhere((data) => data.city == cityToRemove);
+
+    if (_citiesData.length != initialCount) {
+      logger.d('CityListManager: Successfully removed ${cityToRemove.name}.'); // Use global logger
+      _saveCitiesToHive();
+
+      if (_selectedCity == cityToRemove) {
+        logger.d('CityListManager: Removed city was selected. Updating selected city.'); // Use global logger
+        if (_citiesData.isNotEmpty) {
+          _selectedCity = _citiesData.first.city;
+          logger.d('CityListManager: New selected city: ${_selectedCity!.name}'); // Use global logger
+        } else {
+          _selectedCity = null;
+          logger.d('CityListManager: No cities left, selected city set to null.'); // Use global logger
+        }
+      }
+      _citiesDataController.add(UnmodifiableListView(_citiesData));
+      if (hasListeners) notifyListeners();
+    } else {
+      logger.d('CityListManager: City ${cityToRemove.name} not found in list, no action taken.'); // Use global logger
     }
   }
 
   Future<void> fetchAvailableCities() async {
     if (kDebugMode) {
-      _logger.d('CityListManager: fetchAvailableCities called. (After initial Hive load)');
+      logger.d('CityListManager: fetchAvailableCities called. (After initial Hive load)'); // Use global logger
     }
     if (_isLoadingCities) {
-      _logger.d('CityListManager: fetchAvailableCities: Already loading, returning.');
+      logger.d('CityListManager: fetchAvailableCities: Already loading, returning.'); // Use global logger
       return;
     }
 
@@ -245,10 +255,10 @@ class CityListManager extends ChangeNotifier {
 
     try {
       if (_selectedCity != null || _citiesData.isNotEmpty) {
-        _logger.d('CityListManager: fetchAvailableCities: Cities available, starting timers.');
+        logger.d('CityListManager: fetchAvailableCities: Cities available, starting timers.'); // Use global logger
         _startTimers();
       } else {
-        _logger.d('CityListManager: fetchAvailableCities: No selected city and no saved cities. Not starting timers.');
+        logger.d('CityListManager: fetchAvailableCities: No selected city and no saved cities. Not starting timers.'); // Use global logger
         _timeUpdateTimer?.cancel();
         _weatherUpdateTimer?.cancel();
       }
@@ -256,9 +266,9 @@ class CityListManager extends ChangeNotifier {
       _isLoadingCities = false;
       _citiesDataController.add(UnmodifiableListView(_citiesData));
       if (hasListeners) notifyListeners();
-      _logger.d('CityListManager: fetchAvailableCities: Completed.');
+      logger.d('CityListManager: fetchAvailableCities: Completed.'); // Use global logger
     } catch (e) {
-      _logger.e('CityListManager: Error in fetchAvailableCities: $e', error: e);
+      logger.e('CityListManager: Error in fetchAvailableCities: $e', error: e); // Use global logger
       _isLoadingCities = false;
       _citiesFetchError = e.toString();
       _citiesData = [];
@@ -270,7 +280,7 @@ class CityListManager extends ChangeNotifier {
 
   Future<List<City>> searchCities(String query) async {
     if (kDebugMode) {
-      _logger.d('CityListManager: searchCities called with query: "$query"');
+      logger.d('CityListManager: searchCities called with query: "$query"'); // Use global logger
     }
     if (query.isEmpty) {
       _isSearchingCities = false;
@@ -286,14 +296,14 @@ class CityListManager extends ChangeNotifier {
     try {
       final List<City> results = await _searchCitiesService.searchCities(query);
       if (kDebugMode) {
-        _logger.d('CityListManager: searchCities results count: ${results.length}');
+        logger.d('CityListManager: searchCities results count: ${results.length}'); // Use global logger
       }
       _isSearchingCities = false;
       if (hasListeners) notifyListeners();
       return results;
     } catch (e) {
       if (kDebugMode) {
-        _logger.e('CityListManager: Error in searchCities: $e', error: e);
+        logger.e('CityListManager: Error in searchCities: $e', error: e); // Use global logger
       }
       _isSearchingCities = false;
       _searchCitiesError = e.toString();
@@ -304,7 +314,7 @@ class CityListManager extends ChangeNotifier {
 
   void selectCity(City city) {
     if (kDebugMode) {
-      _logger.d('CityListManager: selectCity called for: ${city.name}');
+      logger.d('CityListManager: selectCity called for: ${city.name}'); // Use global logger
     }
     if (_selectedCity == city) return;
 
@@ -314,7 +324,7 @@ class CityListManager extends ChangeNotifier {
 
     if (existingCityData == null) {
       if (kDebugMode) {
-        _logger.d('CityListManager: City ${city.name} not in managed list, adding as unsaved.');
+        logger.d('CityListManager: City ${city.name} not in managed list, adding as unsaved.'); // Use global logger
       }
       final CityDisplayData newCityDisplayData = CityDisplayData(
         city: city,
@@ -335,7 +345,7 @@ class CityListManager extends ChangeNotifier {
       _fetchAndUpdateSingleCity(city);
     } else {
       if (kDebugMode) {
-        _logger.d('CityListManager: City ${city.name} already in managed list, setting as selected.');
+        logger.d('CityListManager: City ${city.name} already in managed list, setting as selected.'); // Use global logger
       }
       _selectedCity = city;
       if (hasListeners) notifyListeners();
@@ -345,12 +355,12 @@ class CityListManager extends ChangeNotifier {
 
   void addCityToSavedList(City city) {
     if (kDebugMode) {
-      _logger.d('CityListManager: addCityToSavedList called for: ${city.name}.');
+      logger.d('CityListManager: addCityToSavedList called for: ${city.name}.'); // Use global logger
     }
     final int index = _citiesData.indexWhere((CityDisplayData data) => data.city == city);
     if (index != -1 && !_citiesData[index].isSaved) {
       if (kDebugMode) {
-        _logger.d('CityListManager: Marking ${city.name} as saved.');
+        logger.d('CityListManager: Marking ${city.name} as saved.'); // Use global logger
       }
       final CityDisplayData updatedData = _citiesData[index].copyWith(isSaved: true);
       _citiesData = List<CityDisplayData>.of(_citiesData)..setAll(index, [updatedData]);
@@ -359,7 +369,7 @@ class CityListManager extends ChangeNotifier {
       _saveCitiesToHive();
     } else {
       if (kDebugMode) {
-        _logger.d('CityListManager: ${city.name} already saved or not found in current managed list. No action taken.');
+        logger.d('CityListManager: ${city.name} already saved or not found in current managed list. No action taken.'); // Use global logger
       }
     }
   }
@@ -371,7 +381,7 @@ class CityListManager extends ChangeNotifier {
 
   void clearSelectedCity() {
     if (kDebugMode) {
-      _logger.d('CityListManager: clearSelectedCity called.');
+      logger.d('CityListManager: clearSelectedCity called.'); // Use global logger
     }
     _cleanUpUnsavedUnselectedCity();
     _selectedCity = null;
@@ -383,48 +393,47 @@ class CityListManager extends ChangeNotifier {
 
   void _cleanUpUnsavedUnselectedCity() {
     if (kDebugMode) {
-      _logger.d('CityListManager: _cleanUpUnsavedUnselectedCity called. Initial cities count: ${_citiesData.length}');
+      logger.d('CityListManager: _cleanUpUnsavedUnselectedCity called. Initial cities count: ${_citiesData.length}'); // Use global logger
       for (var data in _citiesData) {
-        _logger.d('  - Before cleanup: ${data.city.name} (Saved: ${data.isSaved}, Selected: ${data.city == _selectedCity})');
+        logger.d('  - Before cleanup: ${data.city.name} (Saved: ${data.isSaved}, Selected: ${data.city == _selectedCity})'); // Use global logger
       }
     }
 
     final List<CityDisplayData> currentCities = List<CityDisplayData>.of(_citiesData);
     final int initialCount = currentCities.length;
-    // Remove cities that are NOT saved and are NOT the currently selected city
     currentCities.removeWhere((CityDisplayData data) => !data.isSaved && data.city != _selectedCity);
     if (currentCities.length != initialCount) {
       if (kDebugMode) {
-        _logger.d('CityListManager: Removed ${initialCount - currentCities.length} unsaved, unselected cities.');
+        logger.d('CityListManager: Removed ${initialCount - currentCities.length} unsaved, unselected cities.'); // Use global logger
       }
       _citiesData = List<CityDisplayData>.unmodifiable(currentCities);
       _citiesDataController.add(_citiesData);
       _saveCitiesToHive();
     } else {
       if (kDebugMode) {
-        _logger.d('CityListManager: No unsaved, unselected cities to remove.');
+        logger.d('CityListManager: No unsaved, unselected cities to remove.'); // Use global logger
       }
     }
     if (kDebugMode) {
-      _logger.d('CityListManager: After _cleanUpUnsavedUnselectedCity, final cities count: ${_citiesData.length}');
+      logger.d('CityListManager: After _cleanUpUnsavedUnselectedCity, final cities count: ${_citiesData.length}'); // Use global logger
       for (var data in _citiesData) {
-        _logger.d('  - After cleanup: ${data.city.name} (Saved: ${data.isSaved}, Selected: ${data.city == _selectedCity})');
+        logger.d('  - After cleanup: ${data.city.name} (Saved: ${data.isSaved}, Selected: ${data.city == _selectedCity})'); // Use global logger
       }
     }
   }
 
   void _startTimers() {
     if (kDebugMode) {
-      _logger.d('CityListManager: _startTimers called.');
+      logger.d('CityListManager: _startTimers called.'); // Use global logger
     }
     _timeUpdateTimer?.cancel();
     _weatherUpdateTimer?.cancel();
 
     if (_citiesData.isNotEmpty) {
-      _logger.d('CityListManager: _startTimers: _citiesData is not empty, initiating _fetchWeatherForAllCities.');
+      logger.d('CityListManager: _startTimers: _citiesData is not empty, initiating _fetchWeatherForAllCities.'); // Use global logger
       _fetchWeatherForAllCities();
     } else {
-      _logger.d('CityListManager: _startTimers: _citiesData is empty, skipping initial weather fetch.');
+      logger.d('CityListManager: _startTimers: _citiesData is empty, skipping initial weather fetch.'); // Use global logger
     }
 
     _timeUpdateTimer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
@@ -477,10 +486,10 @@ class CityListManager extends ChangeNotifier {
 
   Future<void> _fetchWeatherForAllCities() async {
     if (kDebugMode) {
-      _logger.d('CityListManager: _fetchWeatherForAllCities called. Cities count: ${_citiesData.length}');
+      logger.d('CityListManager: _fetchWeatherForAllCities called. Cities count: ${_citiesData.length}'); // Use global logger
     }
     if (_citiesData.isEmpty) {
-      _logger.d('CityListManager: _citiesData is empty, skipping weather fetch for all cities.');
+      logger.d('CityListManager: _citiesData is empty, skipping weather fetch for all cities.'); // Use global logger
       return;
     }
 
@@ -502,17 +511,17 @@ class CityListManager extends ChangeNotifier {
 
     await Future.wait(fetchFutures);
     _citiesDataController.add(UnmodifiableListView(_citiesData));
-    _logger.d('CityListManager: _fetchWeatherForAllCities: All fetches completed.');
+    logger.d('CityListManager: _fetchWeatherForAllCities: All fetches completed.'); // Use global logger
   }
 
   Future<void> _fetchAndUpdateSingleCity(City city) async {
     if (kDebugMode) {
-      _logger.d('CityListManager: _fetchAndUpdateSingleCity called for: ${city.name}');
+      logger.d('CityListManager: _fetchAndUpdateSingleCity called for: ${city.name}'); // Use global logger
     }
     try {
       final Map<String, dynamic> apiResponse = await _weatherService.fetchCityTimeAndWeather(city);
       if (kDebugMode) {
-        _logger.d('CityListManager: Weather data received for ${city.name}.');
+        logger.d('CityListManager: Weather data received for ${city.name}.'); // Use global logger
       }
 
       final CityLiveInfo newLiveInfo = CityLiveInfo(
@@ -544,7 +553,7 @@ class CityListManager extends ChangeNotifier {
       }
     } catch (e) {
       if (kDebugMode) {
-        _logger.e('CityListManager: Error fetching weather for ${city.name}: $e', error: e);
+        logger.e('CityListManager: Error fetching weather for ${city.name}: $e', error: e); // Use global logger
       }
       final int index = _citiesData.indexWhere((CityDisplayData c) => c.city == city);
       if (index != -1) {
@@ -573,7 +582,7 @@ class CityListManager extends ChangeNotifier {
   @override
   void dispose() {
     if (kDebugMode) {
-      _logger.d('CityListManager: dispose called.');
+      logger.d('CityListManager: dispose called.'); // Use global logger
     }
     _timeUpdateTimer?.cancel();
     _weatherUpdateTimer?.cancel();

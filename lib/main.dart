@@ -1,29 +1,15 @@
 // lib/main.dart
 
 import 'package:flutter/material.dart';
-import 'package:hive_ce_flutter/adapters.dart';
+import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:rise_and_shine/providers/app_managers_provider.dart';
 import 'package:rise_and_shine/screens/weather_screen.dart';
-import 'package:logger/logger.dart';
-
-// No need to import .g.dart files if not using generated TypeAdapters
-// import 'package:rise_and_shine/models/city.g.dart';
-// import 'package:rise_and_shine/models/city_live_info.g.dart';
-// import 'package:rise_and_shine/models/hourly_forecast.g.dart';
-// import 'package:rise_and_shine/models/daily_forecast.g.dart';
+// REMOVED: import 'package:logger/logger.dart'; // No longer needed here
+import 'package:rise_and_shine/utils/app_logger.dart'; // NEW: Import the global logger
 
 
-final Logger _logger = Logger(
-  printer: PrettyPrinter(
-    methodCount: 0,
-    errorMethodCount: 5,
-    lineLength: 120,
-    colors: true,
-    printEmojis: true,
-    dateTimeFormat: DateTimeFormat.onlyTime,
-  ),
-);
+// REMOVED: final Logger _logger = Logger(...); // No longer declared here
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,25 +18,13 @@ Future<void> main() async {
   try {
     final appDocumentDir = await getApplicationDocumentsDirectory();
     await Hive.initFlutter(appDocumentDir.path);
-    _logger.d('Hive initialized at: ${appDocumentDir.path}');
+    logger.d('Hive initialized at: ${appDocumentDir.path}'); // Use global logger
 
-    // FIX: TEMPORARY DEBUGGING STEP: Clear the Hive box on every startup
-    // This will delete any old, potentially corrupted data.
-    // REMOVE THIS LINE AFTER DEBUGGING IS COMPLETE.
-    //await Hive.deleteBoxFromDisk('savedCitiesBox');
-    //_logger.d('Hive box "savedCitiesBox" cleared for debugging.');
-
-
-    // We are not using generated TypeAdapters, so no registerAdapter calls here.
-    // If you were using them, they would be here:
-    // Hive.registerAdapter(CityAdapter());
-    // Hive.registerAdapter(CityLiveInfoAdapter());
-    // Hive.registerAdapter(HourlyForecastAdapter());
-    // Hive.registerAdapter(DailyForecastAdapter());
+    // REMOVED: await Hive.deleteBoxFromDisk('savedCitiesBox'); // This temporary line is now removed.
+    // _logger.d('Hive box "savedCitiesBox" cleared for debugging.'); // This log is also removed.
 
   } catch (e) {
-    _logger.e('Error initializing Hive or registering adapters: $e');
-    // Depending on severity, you might want to show an error screen or exit
+    logger.e('Error initializing Hive: $e'); // Use global logger
   }
 
   runApp(const MyApp());

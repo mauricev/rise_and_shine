@@ -1,6 +1,8 @@
 // lib/models/daily_forecast.dart
 import 'package:flutter/foundation.dart';
-import 'package:logger/logger.dart';
+// REMOVED: import 'package:logger/logger.dart'; // No longer needed here
+import 'package:rise_and_shine/utils/app_logger.dart'; // NEW: Import the global logger
+
 
 class DailyForecast {
   final DateTime time;
@@ -17,29 +19,16 @@ class DailyForecast {
     required this.description,
   });
 
-  // Factory constructor to create a DailyForecast from JSON data
   factory DailyForecast.fromJson(Map<String, dynamic> json) {
-    final Logger logger = Logger(
-      printer: PrettyPrinter(
-        methodCount: 0,
-        errorMethodCount: 5,
-        lineLength: 120,
-        colors: true,
-        printEmojis: true,
-        dateTimeFormat: DateTimeFormat.onlyTime,
-      ),
-    );
+    // REMOVED: final Logger logger = Logger(...); // No longer declared here
 
     try {
-      // FIX: Use Map<String, dynamic>.from for robustness if json is _Map<dynamic, dynamic>
       final Map<String, dynamic> safeJson = Map<String, dynamic>.from(json);
       final int dt = safeJson['dt'] as int;
       final DateTime time = DateTime.fromMillisecondsSinceEpoch(dt * 1000, isUtc: true);
-      // FIX: Robustly cast the nested temp map
       final Map<String, dynamic> tempMap = Map<String, dynamic>.from(safeJson['temp']);
       final double minTemp = (tempMap['min'] as num).toDouble();
       final double maxTemp = (tempMap['max'] as num).toDouble();
-      // FIX: Robustly cast the nested weather map
       final Map<String, dynamic> weatherMap = Map<String, dynamic>.from((safeJson['weather'] as List<dynamic>)[0]);
       final String icon = weatherMap['icon'] as String;
       final String description = weatherMap['description'] as String;
@@ -52,12 +41,11 @@ class DailyForecast {
         description: description,
       );
     } catch (e) {
-      logger.e('DailyForecast: Error parsing JSON: $e, JSON: $json', error: e);
+      logger.e('DailyForecast: Error parsing JSON: $e, JSON: $json', error: e); // Use global logger
       rethrow;
     }
   }
 
-  // Method to convert a DailyForecast object to JSON
   Map<String, dynamic> toJson() {
     return {
       'dt': time.millisecondsSinceEpoch ~/ 1000,
@@ -71,7 +59,6 @@ class DailyForecast {
     };
   }
 
-  // copyWith method for immutability
   DailyForecast copyWith({
     DateTime? time,
     double? minTemperatureCelsius,

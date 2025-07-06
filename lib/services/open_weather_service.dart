@@ -4,8 +4,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/models/hourly_forecast.dart';
-import 'package:rise_and_shine/models/daily_forecast.dart'; // NEW: Import DailyForecast model
-import 'package:logger/logger.dart';
+import 'package:rise_and_shine/models/daily_forecast.dart';
+// REMOVED: import 'package:logger/logger.dart'; // No longer needed here
+import 'package:rise_and_shine/utils/app_logger.dart'; // NEW: Import the global logger
 import 'package:flutter/foundation.dart';
 
 class OpenWeatherService {
@@ -13,33 +14,22 @@ class OpenWeatherService {
   static const String _oneCallBaseUrl = 'https://api.openweathermap.org/data/3.0/onecall';
   static const String _geocodingBaseUrl = 'https://api.openweathermap.org/geo/1.0/reverse';
 
-  final Logger _logger = Logger(
-    printer: PrettyPrinter(
-      methodCount: 0,
-      errorMethodCount: 5,
-      lineLength: 120,
-      colors: true,
-      printEmojis: true,
-      dateTimeFormat: DateTimeFormat.onlyTime,
-    ),
-  );
+  // REMOVED: final Logger _logger = Logger(...); // No longer declared here
 
   Future<Map<String, dynamic>> fetchCityTimeAndWeather(City city) async {
-    // FIX: Changed exclude parameter to get 'hourly' AND 'daily' data.
-    // We now exclude minutely and alerts.
     final Uri uri = Uri.parse(
         '$_oneCallBaseUrl?lat=${city.latitude}&lon=${city.longitude}&exclude=minutely,alerts&appid=$_apiKey&units=metric');
 
     if (kDebugMode) {
-      _logger.d('OpenWeatherService: Fetching weather from One Call API 3.0: $uri');
-      _logger.d('OpenWeatherService: Using API Key: $_apiKey');
+      logger.d('OpenWeatherService: Fetching weather from One Call API 3.0: $uri'); // Use global logger
+      logger.d('OpenWeatherService: Using API Key: $_apiKey'); // Use global logger
     }
 
     final http.Response response = await http.get(uri);
 
     if (kDebugMode) {
-      _logger.d('OpenWeatherService: Response status code: ${response.statusCode}');
-      _logger.d('OpenWeatherService: Response body: ${response.body}');
+      logger.d('OpenWeatherService: Response status code: ${response.statusCode}'); // Use global logger
+      logger.d('OpenWeatherService: Response body: ${response.body}'); // Use global logger
     }
 
     if (response.statusCode == 200) {
@@ -60,29 +50,25 @@ class OpenWeatherService {
         final String weatherIconCode = firstWeatherCondition['icon'] as String;
         final int timezoneOffset = data['timezone_offset'] as int;
 
-        // Parse hourly forecast data
         List<HourlyForecast> hourlyForecasts = [];
         if (data['hourly'] != null) {
           final List<dynamic> hourlyDataList = data['hourly'] as List<dynamic>;
-          // Take only the next 12 hours
           for (int i = 0; i < hourlyDataList.length && i < 12; i++) {
-            hourlyForecasts.add(HourlyForecast.fromJson(hourlyDataList[i] as Map<String, dynamic>));
+            hourlyForecasts.add(HourlyForecast.fromJson(Map<String, dynamic>.from(hourlyDataList[i])));
           }
           if (kDebugMode) {
-            _logger.d('OpenWeatherService: Parsed ${hourlyForecasts.length} hourly forecasts.');
+            logger.d('OpenWeatherService: Parsed ${hourlyForecasts.length} hourly forecasts.'); // Use global logger
           }
         }
 
-        // NEW: Parse daily forecast data
         List<DailyForecast> dailyForecasts = [];
         if (data['daily'] != null) {
           final List<dynamic> dailyDataList = data['daily'] as List<dynamic>;
-          // Take only the next 8 days (excluding current day which is usually index 0)
           for (int i = 0; i < dailyDataList.length && i < 8; i++) {
-            dailyForecasts.add(DailyForecast.fromJson(dailyDataList[i] as Map<String, dynamic>));
+            dailyForecasts.add(DailyForecast.fromJson(Map<String, dynamic>.from(dailyDataList[i])));
           }
           if (kDebugMode) {
-            _logger.d('OpenWeatherService: Parsed ${dailyForecasts.length} daily forecasts.');
+            logger.d('OpenWeatherService: Parsed ${dailyForecasts.length} daily forecasts.'); // Use global logger
           }
         }
 
@@ -98,17 +84,17 @@ class OpenWeatherService {
           'weatherIconCode': weatherIconCode,
           'timezoneOffsetSeconds': timezoneOffset,
           'hourlyForecasts': hourlyForecasts,
-          'dailyForecasts': dailyForecasts, // NEW: Include daily forecasts in the returned map
+          'dailyForecasts': dailyForecasts,
         };
 
         if (kDebugMode) {
-          _logger.d('OpenWeatherService: Successfully parsed weather data: $parsedData');
+          logger.d('OpenWeatherService: Successfully parsed weather data: $parsedData'); // Use global logger
         }
         return parsedData;
       } catch (e) {
         if (kDebugMode) {
-          _logger.e('OpenWeatherService: Error parsing weather data for ${city.name}: $e', error: e);
-          _logger.e('OpenWeatherService: Raw data that caused parsing error: ${response.body}');
+          logger.e('OpenWeatherService: Error parsing weather data for ${city.name}: $e', error: e); // Use global logger
+          logger.e('OpenWeatherService: Raw data that caused parsing error: ${response.body}'); // Use global logger
         }
         throw Exception('Failed to parse weather data for ${city.name}: $e');
       }
@@ -116,7 +102,7 @@ class OpenWeatherService {
       final Map<String, dynamic> errorData = jsonDecode(response.body) as Map<String, dynamic>;
       final String errorMessage = errorData['message'] as String? ?? 'Unknown error';
       if (kDebugMode) {
-        _logger.e('OpenWeatherService: Failed to load weather data for ${city.name}. Status: ${response.statusCode}, Message: $errorMessage');
+        logger.e('OpenWeatherService: Failed to load weather data for ${city.name}. Status: ${response.statusCode}, Message: $errorMessage'); // Use global logger
       }
       throw Exception('Failed to load weather data for ${city.name}: $errorMessage (Status: ${response.statusCode})');
     }
@@ -127,25 +113,25 @@ class OpenWeatherService {
         '$_geocodingBaseUrl?lat=$latitude&lon=$longitude&limit=1&appid=$_apiKey');
 
     if (kDebugMode) {
-      _logger.d('OpenWeatherService: Reverse geocoding from: $uri');
+      logger.d('OpenWeatherService: Reverse geocoding from: $uri'); // Use global logger
     }
 
     final http.Response response = await http.get(uri);
 
     if (kDebugMode) {
-      _logger.d('OpenWeatherService: Reverse geocoding response status code: ${response.statusCode}');
-      _logger.d('OpenWeatherService: Reverse geocoding response body: ${response.body}');
+      logger.d('OpenWeatherService: Reverse geocoding response status code: ${response.statusCode}'); // Use global logger
+      logger.d('OpenWeatherService: Reverse geocoding response body: ${response.body}'); // Use global logger
     }
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
       if (data.isEmpty) {
-        _logger.d('OpenWeatherService: No geocoding results found for $latitude, $longitude.');
+        logger.d('OpenWeatherService: No geocoding results found for $latitude, $longitude.'); // Use global logger
         return null;
       }
 
       try {
-        final Map<String, dynamic> cityData = (data[0] as Map).cast<String, dynamic>();
+        final Map<String, dynamic> cityData = Map<String, dynamic>.from(data[0]); // Use Map.from
         final String name = cityData['name'] as String;
         final String country = cityData['country'] as String;
         final String? state = cityData['state'] as String?;
@@ -169,17 +155,17 @@ class OpenWeatherService {
         } else {
           final Map<String, dynamic> errorData = jsonDecode(timezoneResponse.body) as Map<String, dynamic>;
           final String errorMessage = errorData['message'] as String? ?? 'Unknown timezone error';
-          _logger.e('OpenWeatherService: Failed to get timezone for $name. Status: ${timezoneResponse.statusCode}, Message: $errorMessage');
+          logger.e('OpenWeatherService: Failed to get timezone for $name. Status: ${timezoneResponse.statusCode}, Message: $errorMessage'); // Use global logger
           throw Exception('Failed to get timezone for $name: $errorMessage');
         }
       } catch (e) {
-        _logger.e('OpenWeatherService: Error parsing geocoding data for $latitude, $longitude: $e', error: e);
+        logger.e('OpenWeatherService: Error parsing geocoding data for $latitude, $longitude: $e', error: e); // Use global logger
         throw Exception('Failed to parse geocoding data: ${e.toString()}');
       }
     } else {
       final Map<String, dynamic> errorData = jsonDecode(response.body) as Map<String, dynamic>;
       final String errorMessage = errorData['message'] as String? ?? 'Unknown error';
-      _logger.e('OpenWeatherService: Failed to reverse geocode $latitude, $longitude. Status: ${response.statusCode}, Message: $errorMessage');
+      logger.e('OpenWeatherService: Failed to reverse geocode $latitude, $longitude. Status: ${response.statusCode}, Message: $errorMessage'); // Use global logger
       throw Exception('Failed to reverse geocode coordinates: $errorMessage (Status: ${response.statusCode})');
     }
   }

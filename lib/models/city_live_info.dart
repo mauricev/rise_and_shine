@@ -2,7 +2,9 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
-import 'package:logger/logger.dart';
+// REMOVED: import 'package:logger/logger.dart'; // No longer needed here
+import 'package:rise_and_shine/utils/app_logger.dart'; // NEW: Import the global logger
+
 
 /// A wrapper for nullable values in copyWith methods to distinguish
 /// between null (meaning "don't change") and Value(null) (meaning "set to null").
@@ -40,7 +42,6 @@ class CityLiveInfo {
     this.error,
   });
 
-  // Factory constructor for loading state
   factory CityLiveInfo.loading(int timezoneOffsetSeconds) {
     return CityLiveInfo(
       currentTimeUtc: DateTime.now().toUtc(),
@@ -49,21 +50,10 @@ class CityLiveInfo {
     );
   }
 
-  // Factory constructor to create CityLiveInfo from JSON
   factory CityLiveInfo.fromJson(Map<String, dynamic> json) {
-    final Logger logger = Logger(
-      printer: PrettyPrinter(
-        methodCount: 0,
-        errorMethodCount: 5,
-        lineLength: 120,
-        colors: true,
-        printEmojis: true,
-        dateTimeFormat: DateTimeFormat.onlyTime,
-      ),
-    );
+    // REMOVED: final Logger logger = Logger(...); // No longer declared here
 
     try {
-      // FIX: Use Map<String, dynamic>.from for robustness if json is _Map<dynamic, dynamic>
       final Map<String, dynamic> safeJson = Map<String, dynamic>.from(json);
       return CityLiveInfo(
         currentTimeUtc: safeJson['currentTimeUtc'] != null
@@ -82,12 +72,11 @@ class CityLiveInfo {
         error: safeJson['error'] as String?,
       );
     } catch (e) {
-      logger.e('CityLiveInfo: Error parsing JSON: $e, JSON: $json', error: e);
+      logger.e('CityLiveInfo: Error parsing JSON: $e, JSON: $json', error: e); // Use global logger
       rethrow;
     }
   }
 
-  // Method to convert CityLiveInfo to JSON
   Map<String, dynamic> toJson() {
     return {
       'currentTimeUtc': currentTimeUtc?.toIso8601String(),

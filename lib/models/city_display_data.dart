@@ -5,7 +5,9 @@ import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/models/city_live_info.dart';
 import 'package:rise_and_shine/models/hourly_forecast.dart';
 import 'package:rise_and_shine/models/daily_forecast.dart';
-import 'package:logger/logger.dart';
+// REMOVED: import 'package:logger/logger.dart'; // No longer needed here
+import 'package:rise_and_shine/utils/app_logger.dart'; // NEW: Import the global logger
+
 
 class CityDisplayData {
   final City city;
@@ -22,21 +24,10 @@ class CityDisplayData {
     this.dailyForecasts,
   });
 
-  // Factory constructor to create CityDisplayData from JSON (for Hive)
   factory CityDisplayData.fromJson(Map<String, dynamic> json) {
-    final Logger logger = Logger(
-      printer: PrettyPrinter(
-        methodCount: 0,
-        errorMethodCount: 5,
-        lineLength: 120,
-        colors: true,
-        printEmojis: true,
-        dateTimeFormat: DateTimeFormat.onlyTime,
-      ),
-    );
+    // REMOVED: final Logger logger = Logger(...); // No longer declared here
 
     try {
-      // FIX: Use Map<String, dynamic>.from for all nested map deserializations
       final City city = City.fromJson(Map<String, dynamic>.from(json['city']));
       final CityLiveInfo liveInfo = CityLiveInfo.fromJson(Map<String, dynamic>.from(json['liveInfo']));
       final bool isSaved = json['isSaved'] as bool;
@@ -44,14 +35,14 @@ class CityDisplayData {
       List<HourlyForecast>? parsedHourlyForecasts;
       if (json['hourlyForecasts'] != null) {
         parsedHourlyForecasts = (json['hourlyForecasts'] as List<dynamic>)
-            .map((e) => HourlyForecast.fromJson(Map<String, dynamic>.from(e))) // FIX: Cast 'e'
+            .map((e) => HourlyForecast.fromJson(Map<String, dynamic>.from(e)))
             .toList();
       }
 
       List<DailyForecast>? parsedDailyForecasts;
       if (json['dailyForecasts'] != null) {
         parsedDailyForecasts = (json['dailyForecasts'] as List<dynamic>)
-            .map((e) => DailyForecast.fromJson(Map<String, dynamic>.from(e))) // FIX: Cast 'e'
+            .map((e) => DailyForecast.fromJson(Map<String, dynamic>.from(e)))
             .toList();
       }
 
@@ -63,12 +54,11 @@ class CityDisplayData {
         dailyForecasts: parsedDailyForecasts,
       );
     } catch (e) {
-      logger.e('CityDisplayData: Error parsing JSON: $e, JSON: $json', error: e);
+      logger.e('CityDisplayData: Error parsing JSON: $e, JSON: $json', error: e); // Use global logger
       rethrow;
     }
   }
 
-  // Method to convert CityDisplayData to JSON (for Hive)
   Map<String, dynamic> toJson() {
     return {
       'city': city.toJson(),
@@ -100,5 +90,3 @@ class CityDisplayData {
     );
   }
 }
-
-// ListExtension is correctly defined in lib/managers/city_list_manager.dart

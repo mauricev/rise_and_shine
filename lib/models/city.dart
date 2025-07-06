@@ -1,5 +1,9 @@
 // lib/models/city.dart
 
+// REMOVED: import 'package:logger/logger.dart'; // No longer needed here
+import 'package:rise_and_shine/utils/app_logger.dart'; // NEW: Import the global logger
+
+
 class City {
   final String name;
   final String country;
@@ -17,9 +21,8 @@ class City {
     required this.timezoneOffsetSeconds,
   });
 
-  // Factory constructor to create a City from JSON (e.g., from OpenWeatherMap Geocoding API or Hive)
   factory City.fromJson(Map<String, dynamic> json) {
-    // FIX: Use Map<String, dynamic>.from for robustness if json is _Map<dynamic, dynamic>
+    // REMOVED: final Logger logger = Logger(...); // No longer declared here
     final Map<String, dynamic> safeJson = Map<String, dynamic>.from(json);
     return City(
       name: safeJson['name'] as String,
@@ -31,7 +34,6 @@ class City {
     );
   }
 
-  // Method to convert a City object to JSON (for Hive storage)
   Map<String, dynamic> toJson() {
     return {
       'name': name,
