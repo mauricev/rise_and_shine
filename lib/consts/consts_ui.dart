@@ -1,36 +1,45 @@
 // lib/consts/consts_ui.dart
 
+// Weather Screen
 const String kWeatherScreenTitle = 'Rise & Shine Weather';
-const String kCitySelectionScreenTitle = 'Select City';
-const String kAddButton = 'ADD';
-const String kAddedConfirmation = 'ADDED!';
-const String kCitiesButton = 'Cities';
-const String kOptionsButton = 'Options'; // NEW: Added for the new button
-
-const String kSearchCityPlaceholder = 'Search for a city...';
-const String kSearchCityHint = 'e.g., London, New York';
-const String kNoSearchResults = 'No search results found.';
-const String kFoundCitiesHeading = 'Found Cities';
-const String kSavedCitiesHeading = 'Saved Cities';
-const String kNoSavedCities = 'No saved cities. Search for a city to add it!';
-
-const String kLoadingCities = 'Loading cities...';
-const String kErrorFetchingCities = 'Error fetching cities:';
-const String kRetryFetchCities = 'Retry';
-const String kNoCitySelected = 'No city selected. Please select one to view weather.';
+const String kHourlyForecastHeading = 'Hourly Forecast';
+const String kDailyForecastHeading = '7-Day Forecast';
+const String kNoCitySelected = 'Please select a city to view weather.';
 const String kSelectACity = 'Select a City';
-const String kErrorLoadingCities = 'Error loading weather for';
-const String kNoCityDataAvailableAfterFetch = 'No city data available after fetch.';
-const String kDataNotFoundForCity = 'Data not found for';
-const String kPleaseSelectAnotherCity = 'Please select another city.';
+const String kLoadingCities = 'Loading weather data...';
+const String kErrorFetchingCities = 'Error fetching weather:';
+const String kRetryFetchCities = 'Retry';
+const String kAddButton = 'Add';
+const String kAddedConfirmation = 'Added!';
+const String kCitiesButton = 'Cities';
+const String kOptionsButton = 'Options';
+const String kOptionsDialogTitle = 'Settings';
+const String kChooseUnitsLabel = 'Choose Units:';
+const String kImperialUnitsLabel = 'Imperial';
+const String kWeatherError = 'Weather Data Error:';
+const String kNotEnoughSpaceForDailyForecast = 'Not enough space for daily forecast';
 
-const String kWeatherError = 'Weather Error:';
-const String kNoWeatherDataAvailable = 'No weather data available.';
-const String kLoadingWeatherForecast = 'Loading...';
+// City Selection Screen
+const String kCitySelectionScreenTitle = 'Select a City';
+const String kSearchCityHint = 'Search for a city...';
+const String kNoCitiesFound = 'No cities found.';
+const String kNoSavedCities = 'No saved cities yet.';
+const String kSaveButton = 'Save';
+const String kRemoveButton = 'Remove';
+const String kCloseButton = 'Close';
+const String kDeleteConfirmationTitle = 'Delete City';
+const String kDeleteConfirmationContent = 'Are you sure you want to delete this city?';
+const String kCancelButton = 'Cancel';
+const String kDeleteButton = 'Delete';
+const String kSearchCityPlaceholder = 'Search for a city...';
+const String kNoSearchResults = 'No search results found.';
+const String kLoadingWeatherForecast = 'Loading weather forecast...';
+const String kFoundCitiesHeading = 'Found Cities';
+const String kSavedCitiesHeading = 'Saved Cities'; // Added this constant
 
+
+// Weather Details
 const String kFeelsLike = 'Feels like:';
 const String kHumidity = 'Humidity:';
 const String kWind = 'Wind:';
-
-const String kHourlyForecastHeading = 'Hourly Forecast';
-const String kDailyForecastHeading = '8-Day Forecast';
+const String kUVIndex = 'UV Index:';

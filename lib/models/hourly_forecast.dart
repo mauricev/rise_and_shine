@@ -1,60 +1,43 @@
 // lib/models/hourly_forecast.dart
 
-import 'package:rise_and_shine/utils/app_logger.dart'; // NEW: Import the global logger
-
-
 class HourlyForecast {
   final DateTime time;
-  final double temperatureCelsius;
+  final double temperatureCelsius; // This will now hold the converted temperature
   final String iconCode;
+  final double? pop; // NEW: Probability of Precipitation
+  final double? windSpeed; // NEW: Wind Speed
 
   HourlyForecast({
     required this.time,
     required this.temperatureCelsius,
     required this.iconCode,
+    this.pop, // NEW
+    this.windSpeed, // NEW
   });
 
   factory HourlyForecast.fromJson(Map<String, dynamic> json) {
-    // REMOVED: final Logger logger = Logger(...); // No longer declared here
-
-    try {
-      final Map<String, dynamic> safeJson = Map<String, dynamic>.from(json);
-      final int dt = safeJson['dt'] as int;
-      final DateTime time = DateTime.fromMillisecondsSinceEpoch(dt * 1000, isUtc: true);
-      final double temperature = (safeJson['temp'] as num).toDouble();
-      final Map<String, dynamic> weatherMap = Map<String, dynamic>.from((safeJson['weather'] as List<dynamic>)[0]);
-      final String icon = weatherMap['icon'] as String;
-
-      return HourlyForecast(
-        time: time,
-        temperatureCelsius: temperature,
-        iconCode: icon,
-      );
-    } catch (e) {
-      logger.e('HourlyForecast: Error parsing JSON: $e, JSON: $json', error: e); // Use global logger
-      rethrow;
-    }
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'dt': time.millisecondsSinceEpoch ~/ 1000,
-      'temp': temperatureCelsius,
-      'weather': [
-        {'icon': iconCode}
-      ],
-    };
+    return HourlyForecast(
+      time: DateTime.fromMillisecondsSinceEpoch((json['dt'] as int) * 1000, isUtc: true),
+      temperatureCelsius: (json['temp'] as num).toDouble(),
+      iconCode: (json['weather'] as List<dynamic>)[0]['icon'] as String,
+      pop: (json['pop'] as num?)?.toDouble(), // NEW: Parse pop
+      windSpeed: (json['wind_speed'] as num?)?.toDouble(), // NEW: Parse wind_speed
+    );
   }
 
   HourlyForecast copyWith({
     DateTime? time,
     double? temperatureCelsius,
     String? iconCode,
+    double? pop, // NEW
+    double? windSpeed, // NEW
   }) {
     return HourlyForecast(
       time: time ?? this.time,
       temperatureCelsius: temperatureCelsius ?? this.temperatureCelsius,
       iconCode: iconCode ?? this.iconCode,
+      pop: pop ?? this.pop, // NEW
+      windSpeed: windSpeed ?? this.windSpeed, // NEW
     );
   }
 }

@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:rise_and_shine/managers/city_list_manager.dart';
 import 'package:rise_and_shine/models/city.dart';
-import 'package:rise_and_shine/models/city_display_data.dart';
+// REMOVED: import 'package:rise_and_shine/models/city_display_data.dart'; // Already removed in previous fix
 import 'package:rise_and_shine/providers/app_managers_provider.dart';
 import 'package:rise_and_shine/consts/consts_ui.dart';
 import 'package:rise_and_shine/utils/app_logger.dart';
@@ -244,7 +244,6 @@ class _CitySelectionScreenState extends State<CitySelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    logger.d('CitySelectionScreen: build called.');
     return Scaffold(
       appBar: _buildAppBar(),
       body: Column(
@@ -307,7 +306,7 @@ class _CitySelectionScreenState extends State<CitySelectionScreen> {
               } else {
                 final List<City> displayCities = _cityListManager.allCities;
 
-                return Expanded( // FIX: Removed misplaced semicolon here
+                return Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

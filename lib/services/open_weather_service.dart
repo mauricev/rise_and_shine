@@ -18,17 +18,17 @@ class OpenWeatherService {
     final Uri uri = Uri.parse(
         '$_oneCallBaseUrl?lat=${city.latitude}&lon=${city.longitude}&exclude=minutely,alerts&appid=$_apiKey&units=metric');
 
-    if (kDebugMode) {
-      logger.d('OpenWeatherService: Fetching weather from One Call API 3.0 (metric units): $uri');
-      logger.d('OpenWeatherService: Using API Key: $_apiKey');
-    }
+    //if (kDebugMode) {
+    //  logger.d('OpenWeatherService: Fetching weather from One Call API 3.0 (metric units): $uri');
+    //  logger.d('OpenWeatherService: Using API Key: $_apiKey');
+   // }
 
     final http.Response response = await http.get(uri);
 
-    if (kDebugMode) {
-      logger.d('OpenWeatherService: Response status code: ${response.statusCode}');
+    //if (kDebugMode) {
+      //logger.d('OpenWeatherService: Response status code: ${response.statusCode}');
       // logger.d('OpenWeatherService: Response body: ${response.body}'); // Avoid logging full body in production
-    }
+    //}
 
     if (response.statusCode == 200) {
       final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -47,6 +47,9 @@ class OpenWeatherService {
         final String description = firstWeatherCondition['description'] as String;
         final String weatherIconCode = firstWeatherCondition['icon'] as String;
         final int timezoneOffset = data['timezone_offset'] as int;
+        final double? uvIndex = (currentWeatherData['uvi'] as num?)?.toDouble(); // NEW: Parse UV Index
+        // POP is generally not available for 'current' in One Call API, but keeping the field in model
+        final double? currentPop = null; // Set to null for current conditions
 
         List<HourlyForecast> hourlyForecasts = [];
         if (data['hourly'] != null) {
@@ -55,7 +58,7 @@ class OpenWeatherService {
             hourlyForecasts.add(HourlyForecast.fromJson(Map<String, dynamic>.from(hourlyDataList[i])));
           }
           if (kDebugMode) {
-            logger.d('OpenWeatherService: Parsed ${hourlyForecasts.length} hourly forecasts.');
+            //logger.d('OpenWeatherService: Parsed ${hourlyForecasts.length} hourly forecasts.');
           }
         }
 
@@ -66,7 +69,7 @@ class OpenWeatherService {
             dailyForecasts.add(DailyForecast.fromJson(Map<String, dynamic>.from(dailyDataList[i])));
           }
           if (kDebugMode) {
-            logger.d('OpenWeatherService: Parsed ${dailyForecasts.length} daily forecasts.');
+           // logger.d('OpenWeatherService: Parsed ${dailyForecasts.length} daily forecasts.');
           }
         }
 
@@ -80,13 +83,12 @@ class OpenWeatherService {
           'description': description,
           'weatherIconCode': weatherIconCode,
           'timezoneOffsetSeconds': timezoneOffset,
+          'uvIndex': uvIndex, // NEW
+          'pop': currentPop, // NEW
           'hourlyForecasts': hourlyForecasts,
           'dailyForecasts': dailyForecasts,
         };
 
-        if (kDebugMode) {
-          logger.d('OpenWeatherService: Successfully parsed raw weather data.');
-        }
         return parsedData;
       } catch (e) {
         if (kDebugMode) {
@@ -115,10 +117,10 @@ class OpenWeatherService {
 
     final http.Response response = await http.get(uri);
 
-    if (kDebugMode) {
-      logger.d('OpenWeatherService: Reverse geocoding response status code: ${response.statusCode}');
+    //if (kDebugMode) {
+      //logger.d('OpenWeatherService: Reverse geocoding response status code: ${response.statusCode}');
       // logger.d('OpenWeatherService: Reverse geocoding response body: ${response.body}'); // Avoid logging full body
-    }
+    //}
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;

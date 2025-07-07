@@ -38,10 +38,10 @@ class SearchCitiesService {
 
     final http.Response response = await http.get(uri);
 
-    if (kDebugMode) {
-      _logger.d('SearchCitiesService: Response status code: ${response.statusCode}');
-      _logger.d('SearchCitiesService: Response body: ${response.body}');
-    }
+    //if (kDebugMode) {
+      //_logger.d('SearchCitiesService: Response status code: ${response.statusCode}');
+      //_logger.d('SearchCitiesService: Response body: ${response.body}');
+    //}
 
     if (response.statusCode == 200) {
       final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
