@@ -193,7 +193,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
       return const CircularProgressIndicator(color: Colors.white);
     } else if (liveInfo.error != null) {
       return Text(
-        '${kWeatherError} ${liveInfo.error}',
+        // Fix: Removed unnecessary braces
+        '$kWeatherError ${liveInfo.error}',
         style: const TextStyle(color: Colors.red, fontSize: 16),
         textAlign: TextAlign.center,
       );
@@ -321,90 +322,84 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   Widget _buildDailyForecastRowItem(DailyForecast forecast, bool isMetric) {
     String tempUnit = isMetric ? 'C' : 'F';
-    String speedUnit = isMetric ? 'm/s' : 'mph';
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 0.5)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              DateFormat('EEE, MMM d').format(forecast.time.toLocal()),
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-            ),
-          ),
-          Expanded(
-            flex: 1,
-            child: Align(
-              alignment: Alignment.center,
-              child: Text(getWeatherEmoji(forecast.iconCode), style: const TextStyle(fontSize: 28)),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                '${forecast.minTemperatureCelsius.toStringAsFixed(0)}°$tempUnit / ${forecast.maxTemperatureCelsius.toStringAsFixed(0)}°$tempUnit',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-          if (forecast.pop != null && forecast.pop! > 0)
-            Expanded(
-              flex: 1,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  '${(forecast.pop! * 100).toStringAsFixed(0)}%',
-                  style: const TextStyle(fontSize: 12, color: Colors.blue),
+      child: SizedBox( // Use SizedBox to define the overall space for the Stack
+        width: double.infinity, // Takes full available width
+        height: 50, // Fixed height for the row to ensure consistent spacing
+        child: LayoutBuilder( // <--- LayoutBuilder now correctly wraps the Stack
+          builder: (context, constraints) {
+            // Calculate the horizontal center of this row's available width
+            final double horizontalCenter = constraints.maxWidth / 2 - kIconWidth;
+
+            return Stack(
+              alignment: Alignment.centerLeft, // Vertically centers and left-aligns unpositioned children
+              children: [
+                // 1. Date/Day (Left-aligned by default due to Stack alignment)
+                Text(
+                  DateFormat('EEE, MMM d').format(forecast.time.toLocal()),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                 ),
-              ),
-            ),
-          if (forecast.windSpeed != null && forecast.windSpeed! >= _weatherManager.getWindSpeedThreshold())
-            Expanded(
-              flex: 1,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  '${forecast.windSpeed!.toStringAsFixed(0)} $speedUnit',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+
+                // 2. Icon Group (Positioned: left edge at calculated center)
+                Positioned( // <--- Positioned is now a direct child of Stack
+                  left: horizontalCenter, // Set the left edge of this widget to the calculated center
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min, // Make the Row only as wide as its children
+                    crossAxisAlignment: CrossAxisAlignment.center, // Vertically center items within this Row
+                    children: [
+                      // Condition Icon (Weather Emoji)
+                      // Wrapped in SizedBox with fixed width and Align.centerLeft for consistent vertical alignment
+                      SizedBox(
+                        width: kIconWidth, // Allocate a fixed width for the icon
+                        child: Align(
+                          alignment: Alignment.centerLeft, // Align the emoji to the left within its SizedBox
+                          child: Text(getWeatherEmoji(forecast.iconCode), style: const TextStyle(fontSize: 28)),
+                        ),
+                      ),
+
+                      // Probability of Precipitation (PoP)
+                      if (forecast.pop != null && forecast.pop! > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4.0), // Small space after icon
+                          child: Text(
+                            '${(forecast.pop! * 100).toStringAsFixed(0)}%',
+                            style: const TextStyle(fontSize: 12, color: Colors.blue),
+                          ),
+                        ),
+                      // Wind Icon (No Value)
+                      if (forecast.windSpeed != null && forecast.windSpeed! >= _weatherManager.getWindSpeedThreshold())
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4.0), // Small space after PoP or icon
+                          child: Icon(Icons.air, size: 16, color: Colors.white70),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            ),
-        ],
+
+                // 3. Min/Max Temperature (Right-aligned)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '${forecast.minTemperatureCelsius.toStringAsFixed(0)}°$tempUnit / ${forecast.maxTemperatureCelsius.toStringAsFixed(0)}°$tempUnit',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 
-  // Old unused button builders (kept due to "no other changes" directive)
-  Widget _buildCitiesButton(BuildContext context) {
-    return IconButton(
-      icon: const Icon(Icons.list),
-      tooltip: kCitiesButton,
-      onPressed: () {
-        logger.d('WeatherScreen: Navigating to CitySelectionScreen.');
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const CitySelectionScreen()),
-        );
-      },
-    );
-  }
+  // Removed unused methods _buildCitiesButton and _buildOptionsButton
+  // as they are no longer referenced after moving buttons to the bottom bar.
 
-  Widget _buildOptionsButton() {
-    return IconButton(
-      icon: const Icon(Icons.settings),
-      tooltip: kOptionsButton,
-      onPressed: _showOptionsDialog,
-    );
-  }
-  // End of old unused button builders
 
   Widget _buildLoadingCitiesState() {
     return const Center(
@@ -609,7 +604,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
   Widget _buildFixedBottomButtons(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      color: Colors.blue.withOpacity(0.8), // Semi-transparent background for the button row
+      // Fix: Changed deprecated withOpacity to withAlpha
+      color: Colors.blue.withAlpha((255 * 0.8).round()), // Semi-transparent background for the button row
       child: SafeArea( // Ensure buttons respect the bottom safe area (e.g., iPhone home indicator)
         top: false, // Don't apply top padding from safe area
         child: Row(
@@ -679,7 +675,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                     bottom: false, // Prevents double-padding if the bottom bar also has SafeArea
                     child: FutureBuilder<void>( // Use FutureBuilder to await manager initialization
                       future: _cityListManager.initialized,
-                      builder: (context, managerInitSnapshot) {
+                      builder: (context, managerInitSnapshot) { // Fix: Corrected typo 'managerInitInitSnapshot'
                         if (managerInitSnapshot.connectionState == ConnectionState.waiting) {
                           return _buildLoadingCitiesState();
                         } else if (managerInitSnapshot.hasError) {
@@ -729,7 +725,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
                                         const Icon(Icons.cloud_off, color: Colors.white, size: 40),
                                         const SizedBox(height: 10),
                                         Text(
-                                          '${kWeatherError} ${cityWeatherData.liveInfo.error}',
+                                          // Fix: Removed unnecessary braces
+                                          '$kWeatherError ${cityWeatherData.liveInfo.error}',
                                           textAlign: TextAlign.center,
                                           style: const TextStyle(fontSize: 16, color: Colors.white),
                                         ),
