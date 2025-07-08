@@ -331,10 +331,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
       child: SizedBox( // Use SizedBox to define the overall space for the Stack
         width: double.infinity, // Takes full available width
         height: 50, // Fixed height for the row to ensure consistent spacing
-        child: LayoutBuilder( // <--- LayoutBuilder now correctly wraps the Stack
+        child: LayoutBuilder( // LayoutBuilder correctly wraps the Stack to get its constraints
           builder: (context, constraints) {
-            // Calculate the horizontal center of this row's available width
-            final double horizontalCenter = constraints.maxWidth / 2 - kIconWidth;
+            // Calculate the horizontal center, then shift left by kIconWidth
+            final double horizontalCenter = (constraints.maxWidth / 2) - kIconWidth;
 
             return Stack(
               alignment: Alignment.centerLeft, // Vertically centers and left-aligns unpositioned children
@@ -346,7 +346,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 ),
 
                 // 2. Icon Group (Positioned: left edge at calculated center)
-                Positioned( // <--- Positioned is now a direct child of Stack
+                Positioned(
                   left: horizontalCenter, // Set the left edge of this widget to the calculated center
                   child: Row(
                     mainAxisSize: MainAxisSize.min, // Make the Row only as wide as its children
@@ -355,7 +355,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                       // Condition Icon (Weather Emoji)
                       // Wrapped in SizedBox with fixed width and Align.centerLeft for consistent vertical alignment
                       SizedBox(
-                        width: kIconWidth, // Allocate a fixed width for the icon
+                        width: kIconWidth, // Allocate a fixed width for the icon using the constant
                         child: Align(
                           alignment: Alignment.centerLeft, // Align the emoji to the left within its SizedBox
                           child: Text(getWeatherEmoji(forecast.iconCode), style: const TextStyle(fontSize: 28)),
@@ -751,24 +751,28 @@ class _WeatherScreenState extends State<WeatherScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
-                                      Stack( // Ensure Stack is here for Add button positioning
-                                        alignment: Alignment.center,
-                                        children: [
-                                          Column(
-                                            children: [
-                                              _buildCityName(selectedCity.name),
-                                              _buildLocalTime(cityWeatherData.liveInfo.formattedLocalTime),
-                                              const SizedBox(height: 20),
-                                              _buildWeatherStatus(cityWeatherData.liveInfo),
-                                            ],
-                                          ),
-                                          // Original Add button placement
-                                          Positioned(
-                                            top: 0,
-                                            right: 0,
-                                            child: _buildAddCityButton(selectedCity, _cityListManager),
-                                          ),
-                                        ],
+                                      // NEW: Wrap the Stack to ensure it takes full available width
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            Column(
+                                              children: [
+                                                _buildCityName(selectedCity.name),
+                                                _buildLocalTime(cityWeatherData.liveInfo.formattedLocalTime),
+                                                const SizedBox(height: 20),
+                                                _buildWeatherStatus(cityWeatherData.liveInfo),
+                                              ],
+                                            ),
+                                            // Positioned at top-right of this now expanded Stack
+                                            Positioned(
+                                              top: 0, // Reverted to 0
+                                              right: 0, // Reverted to 0
+                                              child: _buildAddCityButton(selectedCity, _cityListManager),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                       const SizedBox(height: 20),
                                       _buildWeatherDetailsText(cityWeatherData.liveInfo),
