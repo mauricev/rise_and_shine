@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/models/hourly_forecast.dart';
 import 'package:rise_and_shine/models/daily_forecast.dart';
+import 'package:rise_and_shine/models/weather_alert.dart'; // NEW: Import WeatherAlert
 import 'package:rise_and_shine/utils/app_logger.dart';
 import 'package:flutter/foundation.dart';
 
@@ -15,20 +16,12 @@ class OpenWeatherService {
 
   Future<Map<String, dynamic>> fetchCityTimeAndWeather(City city) async {
     // Always request in metric units from OpenWeatherMap API
+    // MODIFIED: Added 'alerts' to the exclude parameter to ensure we explicitly request them
+    // (though OpenWeatherMap's docs imply they are included if present, being explicit is safer)
     final Uri uri = Uri.parse(
-        '$_oneCallBaseUrl?lat=${city.latitude}&lon=${city.longitude}&exclude=minutely,alerts&appid=$_apiKey&units=metric');
-
-    //if (kDebugMode) {
-    //  logger.d('OpenWeatherService: Fetching weather from One Call API 3.0 (metric units): $uri');
-    //  logger.d('OpenWeatherService: Using API Key: $_apiKey');
-   // }
+        '$_oneCallBaseUrl?lat=${city.latitude}&lon=${city.longitude}&exclude=minutely&appid=$_apiKey&units=metric');
 
     final http.Response response = await http.get(uri);
-
-    //if (kDebugMode) {
-      //logger.d('OpenWeatherService: Response status code: ${response.statusCode}');
-      // logger.d('OpenWeatherService: Response body: ${response.body}'); // Avoid logging full body in production
-    //}
 
     if (response.statusCode == 200) {
       final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -47,18 +40,14 @@ class OpenWeatherService {
         final String description = firstWeatherCondition['description'] as String;
         final String weatherIconCode = firstWeatherCondition['icon'] as String;
         final int timezoneOffset = data['timezone_offset'] as int;
-        final double? uvIndex = (currentWeatherData['uvi'] as num?)?.toDouble(); // NEW: Parse UV Index
-        // POP is generally not available for 'current' in One Call API, but keeping the field in model
-        final double? currentPop = null; // Set to null for current conditions
+        final double? uvIndex = (currentWeatherData['uvi'] as num?)?.toDouble();
+        final double? currentPop = null;
 
         List<HourlyForecast> hourlyForecasts = [];
         if (data['hourly'] != null) {
           final List<dynamic> hourlyDataList = data['hourly'] as List<dynamic>;
           for (int i = 0; i < hourlyDataList.length && i < 12; i++) {
             hourlyForecasts.add(HourlyForecast.fromJson(Map<String, dynamic>.from(hourlyDataList[i])));
-          }
-          if (kDebugMode) {
-            //logger.d('OpenWeatherService: Parsed ${hourlyForecasts.length} hourly forecasts.');
           }
         }
 
@@ -68,10 +57,22 @@ class OpenWeatherService {
           for (int i = 0; i < dailyDataList.length && i < 8; i++) {
             dailyForecasts.add(DailyForecast.fromJson(Map<String, dynamic>.from(dailyDataList[i])));
           }
+        }
+
+        // NEW: Parse weather alerts
+        List<WeatherAlert> alerts = [];
+        if (data['alerts'] != null) {
+          final List<dynamic> alertsDataList = data['alerts'] as List<dynamic>;
+          alerts = alertsDataList.map((alertJson) => WeatherAlert.fromJson(Map<String, dynamic>.from(alertJson))).toList();
           if (kDebugMode) {
-           // logger.d('OpenWeatherService: Parsed ${dailyForecasts.length} daily forecasts.');
+            logger.d('OpenWeatherService: Parsed ${alerts.length} weather alerts.');
+          }
+        } else {
+          if (kDebugMode) {
+            logger.d('OpenWeatherService: No weather alerts found in API response.');
           }
         }
+
 
         final Map<String, dynamic> parsedData = {
           'temperatureCelsius': temperature,
@@ -83,10 +84,11 @@ class OpenWeatherService {
           'description': description,
           'weatherIconCode': weatherIconCode,
           'timezoneOffsetSeconds': timezoneOffset,
-          'uvIndex': uvIndex, // NEW
-          'pop': currentPop, // NEW
+          'uvIndex': uvIndex,
+          'pop': currentPop,
           'hourlyForecasts': hourlyForecasts,
           'dailyForecasts': dailyForecasts,
+          'alerts': alerts, // NEW: Include alerts in the returned map
         };
 
         return parsedData;
@@ -117,11 +119,6 @@ class OpenWeatherService {
 
     final http.Response response = await http.get(uri);
 
-    //if (kDebugMode) {
-      //logger.d('OpenWeatherService: Reverse geocoding response status code: ${response.statusCode}');
-      // logger.d('OpenWeatherService: Reverse geocoding response body: ${response.body}'); // Avoid logging full body
-    //}
-
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
       if (data.isEmpty) {
@@ -135,7 +132,6 @@ class OpenWeatherService {
         final String country = cityData['country'] as String;
         final String? state = cityData['state'] as String?;
 
-        // Fetch timezone separately using One Call API, as reverse geocoding doesn't provide it
         final Uri timezoneUri = Uri.parse(
             '$_oneCallBaseUrl?lat=$latitude&lon=$longitude&exclude=current,minutely,hourly,daily,alerts&appid=$_apiKey');
         final http.Response timezoneResponse = await http.get(timezoneUri);

@@ -1,9 +1,9 @@
-// lib/screens/city_selection_screen.dart
+// lib/screens/city_selection_screen.dart (Only relevant imports shown)
 
 import 'package:flutter/material.dart';
 import 'package:rise_and_shine/managers/city_list_manager.dart';
 import 'package:rise_and_shine/models/city.dart';
-// REMOVED: import 'package:rise_and_shine/models/city_display_data.dart'; // Already removed in previous fix
+import 'package:rise_and_shine/models/city_weather_data.dart'; // NEW: Import CityWeatherData
 import 'package:rise_and_shine/providers/app_managers_provider.dart';
 import 'package:rise_and_shine/consts/consts_ui.dart';
 import 'package:rise_and_shine/utils/app_logger.dart';

@@ -35,11 +35,17 @@ const String kSearchCityPlaceholder = 'Search for a city...';
 const String kNoSearchResults = 'No search results found.';
 const String kLoadingWeatherForecast = 'Loading weather forecast...';
 const String kFoundCitiesHeading = 'Found Cities';
-const String kSavedCitiesHeading = 'Saved Cities'; // Added this constant
-
+const String kSavedCitiesHeading = 'Saved Cities';
 
 // Weather Details
 const String kFeelsLike = 'Feels like:';
 const String kHumidity = 'Humidity:';
 const String kWind = 'Wind:';
 const String kUVIndex = 'UV Index:';
+
+// NEW: Weather Alerts
+const String kWeatherAlertsHeading = 'Weather Alerts';
+const String kAlertSeverityLabel = 'Severity:';
+const String kAlertUrgencyLabel = 'Urgency:';
+const String kAlertNotAvailable = 'N/A'; // For cases where severity/urgency might be null
+const String kAlertSourceLabel = 'Source:'; // For alert sender name
