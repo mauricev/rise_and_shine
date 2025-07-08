@@ -1,7 +1,11 @@
-// lib/screens/weather_screen.dart (Only the _buildWeatherAlertsSection method and surrounding context shown)
+// lib/screens/weather_screen.dart
 
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:rise_and_shine/managers/city_list_manager.dart';
+import 'package:rise_and_shine/managers/unit_system_manager.dart';
+import 'package:rise_and_shine/managers/weather_manager.dart';
 import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/models/city_live_info.dart';
 import 'package:rise_and_shine/models/hourly_forecast.dart';
@@ -9,16 +13,11 @@ import 'package:rise_and_shine/models/daily_forecast.dart';
 import 'package:rise_and_shine/models/city_weather_data.dart';
 import 'package:rise_and_shine/models/weather_alert.dart';
 import 'package:rise_and_shine/providers/app_managers_provider.dart';
-import 'package:rise_and_shine/screens/city_selection_screen.dart';
 import 'package:rise_and_shine/consts/consts_ui.dart';
 import 'package:rise_and_shine/consts/consts_app.dart';
-import 'dart:async';
-import 'package:intl/intl.dart';
 import 'package:rise_and_shine/utils/app_logger.dart';
 import 'package:rise_and_shine/utils/weather_icons.dart';
-import 'package:rise_and_shine/widgets/toggle_button.dart';
-import 'package:rise_and_shine/managers/weather_manager.dart';
-import 'package:rise_and_shine/managers/unit_system_manager.dart';
+import 'package:rise_and_shine/screens/city_selection_screen.dart';
 
 
 class WeatherScreen extends StatefulWidget {
@@ -29,141 +28,132 @@ class WeatherScreen extends StatefulWidget {
 }
 
 class _WeatherScreenState extends State<WeatherScreen> {
-  bool _showAddedConfirmation = false;
-  Timer? _addedConfirmationTimer;
-
   late CityListManager _cityListManager;
   late UnitSystemManager _unitSystemManager;
   late WeatherManager _weatherManager;
 
-  bool _didInitialSetup = false;
-  bool _hasMeasuredDailyForecastRowHeight = false;
+  bool _showAddedConfirmation = false;
+  Timer? _addedConfirmationTimer;
 
-  final GlobalKey _dailyForecastRowKey = GlobalKey();
-  double _dailyForecastRowHeight = kDailyForecastRowHeight;
+  // Removed _dailyForecastRowKey and _dailyForecastRowHeight as they are no longer needed
+  // and were causing the crash due to incorrect usage with ListView.builder.
 
   @override
   void initState() {
     super.initState();
     logger.d('WeatherScreen: initState called.');
+    // Removed addPostFrameCallback related to _calculateDailyForecastRowHeight
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_didInitialSetup) {
-      final appManagers = AppManagers.of(context);
-      _cityListManager = appManagers.cityListManager;
-      _unitSystemManager = appManagers.unitSystemManager;
-      _weatherManager = appManagers.weatherManager;
-
-      logger.d('WeatherScreen: didChangeDependencies called. Managers accessed.');
-
-      _didInitialSetup = true;
-    } else {
-      logger.d('WeatherScreen: didChangeDependencies called again, initial setup already triggered.');
-    }
-
-    if (_cityListManager.selectedCity != null && !_hasMeasuredDailyForecastRowHeight) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _calculateDailyForecastRowHeight();
-      });
-    }
+    final appManagers = AppManagers.of(context);
+    _cityListManager = appManagers.cityListManager;
+    _unitSystemManager = appManagers.unitSystemManager;
+    _weatherManager = appManagers.weatherManager;
+    logger.d('WeatherScreen: didChangeDependencies called. Managers accessed.');
   }
 
-  void _calculateDailyForecastRowHeight() {
-    if (_dailyForecastRowKey.currentContext != null) {
-      final RenderBox renderBox = _dailyForecastRowKey.currentContext!.findRenderObject() as RenderBox;
-      final newHeight = renderBox.size.height;
-      if (newHeight > 0 && newHeight != _dailyForecastRowHeight) {
-        setState(() {
-          _dailyForecastRowHeight = newHeight;
-          _hasMeasuredDailyForecastRowHeight = true;
-          logger.d('WeatherScreen: Calculated daily forecast row height: $_dailyForecastRowHeight');
-        });
-      } else if (newHeight == 0) {
-        logger.w('WeatherScreen: Measured daily forecast row height is 0. Using default.');
-      }
-    } else {
-      logger.w('WeatherScreen: _dailyForecastRowKey.currentContext is null. Cannot calculate row height.');
-    }
-  }
-
-  @override
-  void dispose() {
-    logger.d('WeatherScreen: dispose called.');
-    _addedConfirmationTimer?.cancel();
-    super.dispose();
-  }
+  // Removed _calculateDailyForecastRowHeight method.
 
   void _addCityToSavedList(City city) {
-    logger.d('WeatherScreen: _addCityToSavedList called for ${city.name}.');
-    _cityListManager.addCityToSavedList(city);
-
-    setState(() {
-      _showAddedConfirmation = true;
-    });
-
-    _addedConfirmationTimer?.cancel();
-    _addedConfirmationTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          _showAddedConfirmation = false;
-        });
-      }
-    });
+    if (!_cityListManager.isCitySaved(city)) {
+      _cityListManager.addCityToSavedList(city);
+      setState(() {
+        _showAddedConfirmation = true;
+      });
+      _addedConfirmationTimer?.cancel(); // Cancel any existing timer
+      _addedConfirmationTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted) {
+          setState(() {
+            _showAddedConfirmation = false;
+          });
+        }
+      });
+      logger.d('WeatherScreen: City ${city.name} added to saved list. Showing confirmation.');
+    } else {
+      logger.d('WeatherScreen: City ${city.name} already saved. No action.');
+    }
   }
 
   void _showOptionsDialog() {
+    logger.d('WeatherScreen: Showing options dialog.');
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        final unitSystemManager = AppManagers.of(context).unitSystemManager;
-        return AlertDialog(
-          title: const Text(kOptionsDialogTitle),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(kChooseUnitsLabel),
-              const SizedBox(height: 16),
-              ListenableBuilder(
-                listenable: unitSystemManager,
-                builder: (context, child) {
-                  return ToggleButton(
-                    initialValue: unitSystemManager.isMetricUnits,
-                    onChanged: (bool newValue) {
-                      unitSystemManager.toggleUnitSystem();
-                      logger.d('Unit system changed to Metric: ${unitSystemManager.isMetricUnits}');
+        return ListenableBuilder(
+          listenable: _unitSystemManager,
+          builder: (context, child) {
+            return AlertDialog(
+              title: const Text(kOptionsDialogTitle),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(kChooseUnitsLabel),
+                  ToggleButtons(
+                    isSelected: [
+                      !_unitSystemManager.isMetricUnits, // Imperial
+                      _unitSystemManager.isMetricUnits, // Metric
+                    ],
+                    onPressed: (int index) {
+                      if (index == 0 && _unitSystemManager.isMetricUnits) {
+                        // Toggling to Imperial
+                        _unitSystemManager.toggleUnitSystem();
+                        logger.d('WeatherScreen: Toggled to Imperial units.');
+                      } else if (index == 1 && !_unitSystemManager.isMetricUnits) {
+                        // Toggling to Metric
+                        _unitSystemManager.toggleUnitSystem();
+                        logger.d('WeatherScreen: Toggled to Metric units.');
+                      }
                     },
-                    leftLabel: kImperialUnitsLabel,
-                    rightLabel: 'Metric',
-                    activeColor: Colors.blueAccent,
-                    inactiveColor: Colors.green,
-                    activeTextColor: Colors.white,
-                    inactiveTextColor: Colors.blueGrey,
-                  );
-                },
+                    borderRadius: BorderRadius.circular(8.0),
+                    selectedColor: Colors.white,
+                    fillColor: Colors.blueAccent,
+                    color: Colors.blueGrey,
+                    children: const <Widget>[
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Text(kImperialUnitsLabel),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Text('Metric'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text(kCloseButton),
-            ),
-          ],
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    logger.d('WeatherScreen: Options dialog closed.');
+                  },
+                  child: const Text(kCloseButton),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
 
-  AppBar _buildAppBar() {
+  @override
+  void dispose() {
+    logger.d('WeatherScreen: dispose called. Cancelling timers.');
+    _addedConfirmationTimer?.cancel();
+    super.dispose();
+  }
+
+  AppBar _buildAppBar(City? selectedCity) {
     return AppBar(
       title: const Text(kWeatherScreenTitle),
       centerTitle: true,
-      actions: const [],
+      actions: const <Widget>[
+        // Reverted: Options and Cities buttons are no longer in the AppBar
+      ],
     );
   }
 
@@ -171,9 +161,16 @@ class _WeatherScreenState extends State<WeatherScreen> {
     return Text(
       cityName,
       style: const TextStyle(
-        fontSize: 28,
+        fontSize: 32,
         fontWeight: FontWeight.bold,
-        color: Colors.blueAccent,
+        color: Colors.white,
+        shadows: [
+          Shadow(
+            blurRadius: 10.0,
+            color: Colors.black54,
+            offset: Offset(2.0, 2.0),
+          ),
+        ],
       ),
       textAlign: TextAlign.center,
     );
@@ -183,83 +180,76 @@ class _WeatherScreenState extends State<WeatherScreen> {
     return Text(
       formattedLocalTime,
       style: const TextStyle(
-        fontSize: 20,
-        fontWeight: FontWeight.w600,
-        color: Colors.black87,
+        fontSize: 16,
+        color: Colors.white70,
+        shadows: [
+          Shadow(
+            blurRadius: 5.0,
+            color: Colors.black45,
+            offset: Offset(1.0, 1.0),
+          ),
+        ],
       ),
-      textAlign: TextAlign.center,
     );
   }
 
   Widget _buildWeatherStatus(CityLiveInfo liveInfo) {
+    final bool isMetric = _unitSystemManager.isMetricUnits;
     if (liveInfo.isLoading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 6.0),
-        child: Text(
-          'Fetching weather…',
-          style: TextStyle(
-            fontSize: 14,
-            fontStyle: FontStyle.italic,
-            color: Colors.grey,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      );
+      return const CircularProgressIndicator(color: Colors.white);
     } else if (liveInfo.error != null) {
-      return Column(
-        children: [
-          const Icon(Icons.warning, color: Colors.orange, size: 28),
-          const SizedBox(height: 3),
-          Text(
-            '$kWeatherError ${liveInfo.error!}',
-            style: const TextStyle(color: Colors.red, fontSize: 11),
-            textAlign: TextAlign.center,
-          ),
-        ],
+      return Text(
+        '${kWeatherError} ${liveInfo.error}',
+        style: const TextStyle(color: Colors.red, fontSize: 16),
+        textAlign: TextAlign.center,
       );
     } else {
-      final String tempUnit = _unitSystemManager.isMetricUnits ? '°C' : '°F';
       return Column(
         children: [
           Text(
-            getWeatherEmoji(liveInfo.weatherIconCode!),
-            style: const TextStyle(fontSize: 50),
-          ),
-          const SizedBox(height: 3),
-          if (liveInfo.description != null)
-            Text(
-              liveInfo.description!,
-              style: const TextStyle(
-                fontSize: 15,
-                color: Colors.black,
-                fontStyle: FontStyle.italic,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          const SizedBox(height: 3),
-          Text(
-            '${liveInfo.temperatureCelsius?.toStringAsFixed(1) ?? ''}$tempUnit',
+            '${liveInfo.temperatureCelsius!.toStringAsFixed(0)}°${isMetric ? 'C' : 'F'}',
             style: const TextStyle(
-              fontSize: 36,
+              fontSize: 64,
               fontWeight: FontWeight.bold,
-              color: Colors.green,
+              color: Colors.white,
+              shadows: [
+                Shadow(
+                  blurRadius: 10.0,
+                  color: Colors.black54,
+                  offset: Offset(3.0, 3.0),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-          _buildWeatherDetailsText(liveInfo),
-          if (liveInfo.uvIndex != null)
-            _buildDetailText(kUVIndex, liveInfo.uvIndex!.toStringAsFixed(0)),
+          if (liveInfo.weatherIconCode != null)
+            Text(
+              getWeatherEmoji(liveInfo.weatherIconCode!),
+              style: const TextStyle(fontSize: 80),
+            ),
+          Text(
+            liveInfo.description ?? 'N/A',
+            style: const TextStyle(
+              fontSize: 20,
+              color: Colors.white,
+              shadows: [
+                Shadow(
+                  blurRadius: 5.0,
+                  color: Colors.black45,
+                  offset: Offset(1.0, 1.0),
+                ),
+              ],
+            ),
+            textAlign: TextAlign.center,
+          ),
         ],
       );
     }
   }
 
+  // Reverted Add button to its previous state and placement
   Widget _buildAddCityButton(City selectedCity, CityListManager manager) {
-    const Size buttonSize = Size(55, 28);
-
-    final bool isCityCurrentlySavedForButton = manager.isCitySaved(selectedCity);
-
-    if (!isCityCurrentlySavedForButton && !_showAddedConfirmation) {
+    final Size buttonSize = const Size(60, 30);
+    if (!manager.isCitySaved(selectedCity)) {
       return SizedBox(
         width: buttonSize.width,
         height: buttonSize.height,
@@ -298,432 +288,128 @@ class _WeatherScreenState extends State<WeatherScreen> {
         ),
       );
     }
-    return SizedBox(
-      width: buttonSize.width,
-      height: buttonSize.height,
-      child: Container(),
-    );
+    return const SizedBox.shrink(); // Return empty widget if city is saved and confirmation is not shown
   }
 
-  Widget _buildHourlyForecastCardItem({
-    required DateTime localForecastTime,
-    required String iconCode,
-    required double temperatureCelsius,
-    double? pop,
-    double? windSpeed,
-  }) {
-    final String unitSymbol = _unitSystemManager.isMetricUnits ? '°C' : '°F';
-    final double windThreshold = _weatherManager.getWindSpeedThreshold();
-    final bool showWindIcon = windSpeed != null && windSpeed >= windThreshold;
+  Widget _buildHourlyForecastCardItem(HourlyForecast forecast, bool isMetric) {
+    String tempUnit = isMetric ? 'C' : 'F';
+    String speedUnit = isMetric ? 'm/s' : 'mph';
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 1.0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      elevation: 1,
-      child: Container(
-        width: 95,
-        padding: const EdgeInsets.all(5.0),
+      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            Text(
-              DateFormat('h a').format(localForecastTime),
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 1),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  getWeatherEmoji(iconCode),
-                  style: const TextStyle(fontSize: 24),
-                ),
-                const SizedBox(width: 2),
-                if (pop != null && pop > 0)
-                  Text(
-                    '${(pop * 100).toStringAsFixed(0)}%',
-                    style: const TextStyle(fontSize: 8, color: Colors.blueGrey, fontWeight: FontWeight.bold),
-                  ),
-                if (pop != null && pop > 0 && showWindIcon)
-                  const SizedBox(width: 2),
-                if (showWindIcon)
-                  const Icon(Icons.wind_power, size: 14, color: Colors.blueGrey),
-              ],
-            ),
-            const SizedBox(height: 1),
-            Text(
-              '${temperatureCelsius.toStringAsFixed(0)}$unitSymbol',
-              style: const TextStyle(fontSize: 13, color: Colors.green),
-            ),
+            Text(DateFormat('h a').format(forecast.time.toLocal()), style: const TextStyle(fontSize: 14)),
+            const SizedBox(height: 4),
+            Text(getWeatherEmoji(forecast.iconCode), style: const TextStyle(fontSize: 32)),
+            const SizedBox(height: 4),
+            Text('${forecast.temperatureCelsius.toStringAsFixed(0)}°$tempUnit',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            if (forecast.pop != null && forecast.pop! > 0) ...[
+              const SizedBox(height: 4),
+              Text('${(forecast.pop! * 100).toStringAsFixed(0)}% Pop',
+                  style: const TextStyle(fontSize: 12, color: Colors.blue)),
+            ],
+            if (forecast.windSpeed != null && forecast.windSpeed! >= _weatherManager.getWindSpeedThreshold()) ...[
+              const SizedBox(height: 4),
+              Text('${forecast.windSpeed!.toStringAsFixed(0)} $speedUnit',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDailyForecastRowItem({
-    Key? key,
-    required DateTime localForecastDate,
-    required String iconCode,
-    required double minTemperatureCelsius,
-    required double maxTemperatureCelsius,
-    double? pop,
-    double? windSpeed,
-  }) {
-    final String unitSymbol = _unitSystemManager.isMetricUnits ? '°C' : '°F';
-    final double windThreshold = _weatherManager.getWindSpeedThreshold();
-    final bool showWindIcon = windSpeed != null && windSpeed >= windThreshold;
+  Widget _buildDailyForecastRowItem(DailyForecast forecast, bool isMetric) {
+    String tempUnit = isMetric ? 'C' : 'F';
+    String speedUnit = isMetric ? 'm/s' : 'mph';
 
-    const double emojiVisualWidth = 26.0;
-    const double gapAfterEmoji = 4.0;
-
-    return Padding(
-      key: key,
-      padding: const EdgeInsets.symmetric(vertical: 5.0, horizontal: 16.0),
+    return Container(
+      // Removed key: _dailyForecastRowKey, to fix crash
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 0.5)),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
             flex: 2,
             child: Text(
-              DateFormat('EEE, MMM d').format(localForecastDate),
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              DateFormat('EEE, MMM d').format(forecast.time.toLocal()),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Align(
+              alignment: Alignment.center,
+              child: Text(getWeatherEmoji(forecast.iconCode), style: const TextStyle(fontSize: 28)),
             ),
           ),
           Expanded(
             flex: 2,
-            child: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints constraints) {
-                final double availableWidth = constraints.maxWidth;
-                final double supplementaryIconsStartLeft =
-                    (availableWidth / 2) + (emojiVisualWidth / 2) + gapAfterEmoji;
-
-                return Stack(
-                  children: [
-                    Align(
-                      alignment: Alignment.center,
-                      child: Text(
-                        getWeatherEmoji(iconCode),
-                        style: const TextStyle(fontSize: 26),
-                      ),
-                    ),
-                    Positioned(
-                      left: supplementaryIconsStartLeft,
-                      top: 0,
-                      bottom: 0,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          if (pop != null && pop > 0)
-                            Text(
-                              '${(pop * 100).toStringAsFixed(0)}%',
-                              style: const TextStyle(fontSize: 8, color: Colors.blueGrey, fontWeight: FontWeight.bold),
-                            ),
-                          if (pop != null && pop > 0 && showWindIcon)
-                            const SizedBox(width: 2),
-                          if (showWindIcon)
-                            const Icon(Icons.wind_power, size: 14, color: Colors.blueGrey),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                '${forecast.minTemperatureCelsius.toStringAsFixed(0)}°$tempUnit / ${forecast.maxTemperatureCelsius.toStringAsFixed(0)}°$tempUnit',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
             ),
           ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              '${minTemperatureCelsius.toStringAsFixed(0)}$unitSymbol / ${maxTemperatureCelsius.toStringAsFixed(0)}$unitSymbol',
-              style: const TextStyle(fontSize: 14, color: Colors.blueGrey),
-              textAlign: TextAlign.right,
+          if (forecast.pop != null && forecast.pop! > 0)
+            Expanded(
+              flex: 1,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${(forecast.pop! * 100).toStringAsFixed(0)}%',
+                  style: const TextStyle(fontSize: 12, color: Colors.blue),
+                ),
+              ),
             ),
-          ),
+          if (forecast.windSpeed != null && forecast.windSpeed! >= _weatherManager.getWindSpeedThreshold())
+            Expanded(
+              flex: 1,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${forecast.windSpeed!.toStringAsFixed(0)} $speedUnit',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildWeatherAlertsSection(List<WeatherAlert> alerts, int timezoneOffsetSeconds) {
-    if (alerts.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-          child: Text(
-            kWeatherAlertsHeading,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.red,
-            ),
-          ),
-        ),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: alerts.length,
-          itemBuilder: (context, index) {
-            final alert = alerts[index];
-            final localStartTime = alert.startTime.add(Duration(seconds: timezoneOffsetSeconds));
-            final localEndTime = alert.endTime.add(Duration(seconds: timezoneOffsetSeconds));
-
-            return Card(
-              margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      alert.event,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: Colors.redAccent,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${DateFormat('MMM d, h:mm a').format(localStartTime)} - ${DateFormat('h:mm a').format(localEndTime)}',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    if (alert.severity != null || alert.urgency != null)
-                      Text(
-                        // FIX: Removed unnecessary braces
-                        '$kAlertSeverityLabel ${alert.severity ?? kAlertNotAvailable}, $kAlertUrgencyLabel ${alert.urgency ?? kAlertNotAvailable}',
-                        style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
-                      ),
-                    const SizedBox(height: 8),
-                    Text(
-                      alert.description,
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                    if (alert.senderName.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4.0),
-                        child: Text(
-                          // FIX: Removed unnecessary braces
-                          '$kAlertSourceLabel ${alert.senderName}',
-                          style: const TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: Colors.black54),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-
-  Widget _buildMainWeatherCard(CityWeatherData cityWeatherData, CityListManager cityListManager) {
-    final City selectedCity = cityWeatherData.city;
-    final CityLiveInfo liveInfo = cityWeatherData.liveInfo;
-    final List<HourlyForecast> rawHourlyForecasts = cityWeatherData.hourlyForecasts;
-    final List<DailyForecast> rawDailyForecasts = cityWeatherData.dailyForecasts;
-    final List<WeatherAlert> alerts = cityWeatherData.alerts;
-
-    final List<HourlyForecast> displayHourlyForecasts = rawHourlyForecasts.isNotEmpty
-        ? rawHourlyForecasts.skip(1).take(8).toList()
-        : [];
-
-    final List<DailyForecast> displayDailyForecasts = rawDailyForecasts.isNotEmpty
-        ? rawDailyForecasts.skip(1).take(8).toList()
-        : [];
-
-    logger.d('WeatherScreen: rawDailyForecasts length: ${rawDailyForecasts.length}');
-    logger.d('WeatherScreen: displayDailyForecasts length (after slicing): ${displayDailyForecasts.length}');
-
-    final DateTime now = DateTime.now().toUtc().add(Duration(seconds: selectedCity.timezoneOffsetSeconds));
-    final List<Widget> weatherSections = [];
-
-    weatherSections.add(
-      Padding(
-        padding: const EdgeInsets.all(6.0),
-        child: Card(
-          elevation: 6,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Stack(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildCityName(selectedCity.name),
-                    const SizedBox(height: 4),
-                    const SizedBox(height: 4),
-                    _buildWeatherStatus(liveInfo),
-                  ],
-                ),
-                _buildAddCityButton(selectedCity, cityListManager),
-                Positioned(
-                  left: 0,
-                  bottom: 0,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 2.0, bottom: 2.0),
-                    child: _buildLocalTime(liveInfo.formattedLocalTime),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    weatherSections.add(const SizedBox(height: 8));
-
-    final List<WeatherAlert> immediateAlerts = alerts.where((alert) =>
-        alert.startTime.toUtc().add(Duration(seconds: selectedCity.timezoneOffsetSeconds)).isBefore(now.add(const Duration(hours: 6)))
-    ).toList();
-
-    final List<WeatherAlert> futureAlerts = alerts.where((alert) =>
-        alert.startTime.toUtc().add(Duration(seconds: selectedCity.timezoneOffsetSeconds)).isAfter(now.add(const Duration(hours: 6)))
-    ).toList();
-
-
-    if (displayHourlyForecasts.isNotEmpty) {
-      weatherSections.add(
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 3.0, horizontal: 16.0),
-          child: Text(
-            kHourlyForecastHeading,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-        ),
-      );
-      weatherSections.add(
-        SizedBox(
-          height: 100,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: displayHourlyForecasts.length,
-            itemBuilder: (context, index) {
-              final HourlyForecast forecast = displayHourlyForecasts[index];
-              final DateTime localForecastTime = forecast.time.add(
-                Duration(seconds: selectedCity.timezoneOffsetSeconds),
-              );
-              return _buildHourlyForecastCardItem(
-                localForecastTime: localForecastTime,
-                iconCode: forecast.iconCode,
-                temperatureCelsius: forecast.temperatureCelsius,
-                pop: forecast.pop,
-                windSpeed: forecast.windSpeed,
-              );
-            },
-          ),
-        ),
-      );
-      weatherSections.add(const SizedBox(height: 8));
-    }
-
-    if (immediateAlerts.isNotEmpty) {
-      weatherSections.add(_buildWeatherAlertsSection(immediateAlerts, selectedCity.timezoneOffsetSeconds));
-      weatherSections.add(const SizedBox(height: 8));
-    }
-
-    if (displayDailyForecasts.isNotEmpty) {
-      weatherSections.add(
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 3.0, horizontal: 16.0),
-          child: Text(
-            kDailyForecastHeading,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-        ),
-      );
-      weatherSections.add(
-        SizedBox(
-          height: displayDailyForecasts.length * _dailyForecastRowHeight +
-              (displayDailyForecasts.isNotEmpty ? (displayDailyForecasts.length - 1) * 1.0 : 0.0),
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: const ClampingScrollPhysics(),
-            itemCount: displayDailyForecasts.length,
-            separatorBuilder: (context, index) => const Divider(
-              color: Colors.grey,
-              thickness: 1,
-              height: 1,
-              indent: 16,
-              endIndent: 16,
-            ),
-            itemBuilder: (context, index) {
-              final DailyForecast forecast = displayDailyForecasts[index];
-              final DateTime localForecastDate = forecast.time.add(
-                Duration(seconds: selectedCity.timezoneOffsetSeconds),
-              );
-              return _buildDailyForecastRowItem(
-                localForecastDate: localForecastDate,
-                iconCode: forecast.iconCode,
-                minTemperatureCelsius: forecast.minTemperatureCelsius,
-                maxTemperatureCelsius: forecast.maxTemperatureCelsius,
-                pop: forecast.pop,
-                windSpeed: forecast.windSpeed,
-              );
-            },
-          ),
-        ),
-      );
-      weatherSections.add(const SizedBox(height: 8));
-    }
-
-    if (futureAlerts.isNotEmpty) {
-      weatherSections.add(_buildWeatherAlertsSection(futureAlerts, selectedCity.timezoneOffsetSeconds));
-      weatherSections.add(const SizedBox(height: 8));
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: weatherSections,
-    );
-  }
-
+  // These button builders are defined, but now unused in the AppBar
   Widget _buildCitiesButton(BuildContext context) {
-    return TextButton(
+    return IconButton(
+      icon: const Icon(Icons.list),
+      tooltip: kCitiesButton,
       onPressed: () {
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (BuildContext context) => const CitySelectionScreen()),
+        logger.d('WeatherScreen: Navigating to CitySelectionScreen.');
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const CitySelectionScreen()),
         );
       },
-      style: TextButton.styleFrom(
-        foregroundColor: Colors.blue.shade700,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        side: BorderSide(color: Colors.blue.shade300),
-      ),
-      child: const Text(kCitiesButton, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
     );
   }
 
   Widget _buildOptionsButton() {
-    return TextButton(
+    return IconButton(
+      icon: const Icon(Icons.settings),
+      tooltip: kOptionsButton,
       onPressed: _showOptionsDialog,
-      style: TextButton.styleFrom(
-        foregroundColor: Colors.grey.shade700,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        side: BorderSide(color: Colors.grey.shade300),
-      ),
-      child: const Text(kOptionsButton, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
     );
   }
 
@@ -733,8 +419,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           CircularProgressIndicator(),
-          SizedBox(height: 12),
-          Text(kLoadingCities, style: TextStyle(fontSize: 14)),
+          SizedBox(height: 16),
+          Text(kLoadingCities, style: TextStyle(fontSize: 18, color: Colors.grey)),
         ],
       ),
     );
@@ -743,21 +429,25 @@ class _WeatherScreenState extends State<WeatherScreen> {
   Widget _buildErrorFetchingCitiesState(String error, CityListManager manager) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 45),
-            const SizedBox(height: 8),
+            const Icon(Icons.error_outline, color: Colors.red, size: 40),
+            const SizedBox(height: 10),
             Text(
               '$kErrorFetchingCities $error',
-              style: const TextStyle(color: Colors.red, fontSize: 14),
               textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, color: Colors.red),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => _weatherManager.fetchWeatherForCities(manager.allCities),
-              child: const Text(kRetryFetchCities, style: TextStyle(fontSize: 14)),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: const Text(kRetryFetchCities),
+              onPressed: () async {
+                logger.d('WeatherScreen: Retrying fetch cities on error.');
+                await _cityListManager.initialized;
+              },
             ),
           ],
         ),
@@ -767,135 +457,384 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   Widget _buildNoCitySelectedState(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text(
-            kNoCitySelected,
-            style: TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (BuildContext context) => const CitySelectionScreen()),
-              );
-            },
-            child: const Text(kSelectACity, style: TextStyle(fontSize: 16)),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              kNoCitySelected,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.location_city),
+              label: const Text(kSelectACity),
+              onPressed: () {
+                logger.d('WeatherScreen: Navigating to CitySelectionScreen from no city state.');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CitySelectionScreen()),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildDetailText(String label, String value, {Color? valueColor}) {
-    return Text(
-      '$label $value',
-      style: TextStyle(fontSize: 16, color: valueColor ?? Colors.blueGrey),
-      textAlign: TextAlign.center,
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 16, color: Colors.white),
+        children: [
+          TextSpan(
+            text: '$label ',
+            style: const TextStyle(fontWeight: FontWeight.w400, color: Colors.white70),
+          ),
+          TextSpan(
+            text: value,
+            style: TextStyle(fontWeight: FontWeight.bold, color: valueColor ?? Colors.white),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildWeatherDetailsText(CityLiveInfo liveInfo) {
-    final String tempUnit = _unitSystemManager.isMetricUnits ? '°C' : '°F';
-    final String speedUnit = _unitSystemManager.isMetricUnits ? 'm/s' : 'mph';
-    final double windThreshold = _weatherManager.getWindSpeedThreshold();
-
-    final Color? windColor = (liveInfo.windSpeed != null && liveInfo.windSpeed! >= windThreshold)
-        ? Colors.red
-        : null;
+    final bool isMetric = _unitSystemManager.isMetricUnits;
+    String speedUnit = isMetric ? 'm/s' : 'mph';
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildDetailText(kFeelsLike, '${liveInfo.feelsLike?.toStringAsFixed(1) ?? ''}$tempUnit'),
-        _buildDetailText(kHumidity, '${liveInfo.humidity ?? ''}%'),
-        _buildDetailText(kWind, '${liveInfo.windSpeed?.toStringAsFixed(1) ?? ''} $speedUnit ${liveInfo.windDirection ?? ''}', valueColor: windColor),
+        _buildDetailText(
+          kFeelsLike,
+          '${liveInfo.feelsLike!.toStringAsFixed(0)}°${isMetric ? 'C' : 'F'}',
+        ),
+        _buildDetailText(
+          kHumidity,
+          '${liveInfo.humidity!}%',
+        ),
+        _buildDetailText(
+          kWind,
+          '${liveInfo.windSpeed!.toStringAsFixed(1)} $speedUnit ${liveInfo.windDirection}',
+        ),
+        if (liveInfo.uvIndex != null)
+          _buildDetailText(
+            kUVIndex,
+            liveInfo.uvIndex!.toStringAsFixed(0),
+            valueColor: getUvIndexColor(liveInfo.uvIndex!),
+          ),
       ],
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    logger.d('WeatherScreen: build called.');
-    final City? selectedCity = AppManagers.of(context).cityListManager.selectedCity;
-
-    final List<DailyForecast> displayDailyForecasts;
-    if (selectedCity != null) {
-      final CityWeatherData? cityWeatherData = AppManagers.of(context).weatherManager.getWeatherForCity(selectedCity);
-      if (cityWeatherData != null && cityWeatherData.dailyForecasts.isNotEmpty) {
-        displayDailyForecasts = cityWeatherData.dailyForecasts.skip(1).take(8).toList();
-      } else {
-        displayDailyForecasts = [];
-      }
-    } else {
-      displayDailyForecasts = [];
+  Widget _buildWeatherAlerts(List<WeatherAlert> alerts) {
+    if (alerts.isEmpty) {
+      return const SizedBox.shrink();
     }
 
-
-    return Scaffold(
-      appBar: _buildAppBar(),
-      body: Column(
+    return Padding(
+      padding: const EdgeInsets.only(top: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: ListenableBuilder(
-                listenable: _cityListManager,
-                builder: (BuildContext context, Widget? child) {
-                  final City? currentSelectedCity = _cityListManager.selectedCity;
-
-                  if (currentSelectedCity == null) {
-                    logger.d('WeatherScreen: Build method: No city selected, showing selection prompt.');
-                    return _buildNoCitySelectedState(context);
-                  }
-
-                  logger.d('WeatherScreen: Build method: Selected city is ${currentSelectedCity.name}. Proceeding to StreamBuilder for weather.');
-                  return StreamBuilder<Map<int, CityWeatherData>>(
-                    stream: _weatherManager.weatherDataStream,
-                    builder: (BuildContext context, AsyncSnapshot<Map<int, CityWeatherData>> snapshot) {
-                      final CityWeatherData? cityWeatherData = snapshot.data?[currentSelectedCity.hashCode];
-
-                      if (cityWeatherData == null || cityWeatherData.liveInfo.isLoading) {
-                        logger.d('WeatherScreen: Build method: Weather data for ${currentSelectedCity.name} is null or loading. Showing progress.');
-                        return _buildLoadingCitiesState();
-                      } else if (cityWeatherData.liveInfo.error != null) {
-                        logger.e('WeatherScreen: Build method: Weather data for ${currentSelectedCity.name} has error: ${cityWeatherData.liveInfo.error}');
-                        return _buildErrorFetchingCitiesState(cityWeatherData.liveInfo.error!, _cityListManager);
-                      }
-
-                      logger.d('WeatherScreen: Build method: Displaying weather for ${currentSelectedCity.name}.');
-                      return _buildMainWeatherCard(cityWeatherData, _cityListManager);
-                    },
-                  );
-                },
-              ),
+          const Text(
+            kWeatherAlertsHeading,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.amberAccent,
+              shadows: [
+                Shadow(
+                  blurRadius: 5.0,
+                  color: Colors.black54,
+                  offset: Offset(1.0, 1.0),
+                ),
+              ],
             ),
           ),
-          if (!_hasMeasuredDailyForecastRowHeight && displayDailyForecasts.isNotEmpty && selectedCity != null)
-            Offstage(
-              offstage: true,
-              child: _buildDailyForecastRowItem(
-                key: _dailyForecastRowKey,
-                localForecastDate: displayDailyForecasts[0].time.add(Duration(seconds: selectedCity.timezoneOffsetSeconds)),
-                iconCode: displayDailyForecasts[0].iconCode,
-                minTemperatureCelsius: displayDailyForecasts[0].minTemperatureCelsius,
-                maxTemperatureCelsius: displayDailyForecasts[0].maxTemperatureCelsius,
-                pop: displayDailyForecasts[0].pop,
-                windSpeed: displayDailyForecasts[0].windSpeed,
-              ),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.red.withAlpha( (255 * 0.2).round() ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.red, width: 1),
             ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0, bottom: 16.0, left: 16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildOptionsButton(),
-                _buildCitiesButton(context),
-              ],
+            padding: const EdgeInsets.all(12.0),
+            child: ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: alerts.length,
+              itemBuilder: (context, index) {
+                final alert = alerts[index];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        alert.event,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        alert.description,
+                        style: const TextStyle(fontSize: 14, color: Colors.white70),
+                      ),
+                      const SizedBox(height: 4),
+                      _buildDetailText(kAlertSourceLabel, alert.senderName, valueColor: Colors.white),
+                      _buildDetailText(kAlertSeverityLabel, alert.severity ?? kAlertNotAvailable,
+                          valueColor: getSeverityColor(alert.severity)),
+                      _buildDetailText(kAlertUrgencyLabel, alert.urgency ?? kAlertNotAvailable,
+                          valueColor: Colors.white),
+                      Text(
+                        '${DateFormat('MMM d, h:mm a').format(alert.startTime.toLocal())} - ${DateFormat('MMM d, h:mm a').format(alert.endTime.toLocal())}',
+                        style: const TextStyle(fontSize: 12, color: Colors.white54),
+                      ),
+                      if (index < alerts.length - 1)
+                        const Divider(color: Colors.white30, height: 16),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ],
       ),
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _cityListManager, // Listen to city list changes
+      builder: (context, _) {
+        final City? selectedCity = _cityListManager.selectedCity;
+        final String? cityListError = _cityListManager.searchCitiesError; // This also captures init errors
+
+        return Scaffold(
+          appBar: _buildAppBar(selectedCity),
+          body: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.blue, Colors.lightBlueAccent],
+              ),
+            ),
+            child: SafeArea(
+              child: FutureBuilder<void>( // Use FutureBuilder to await manager initialization
+                future: _cityListManager.initialized,
+                builder: (context, managerInitSnapshot) {
+                  if (managerInitSnapshot.connectionState == ConnectionState.waiting) {
+                    return _buildLoadingCitiesState();
+                  } else if (managerInitSnapshot.hasError) {
+                    // If manager initialization itself failed
+                    return _buildErrorFetchingCitiesState(managerInitSnapshot.error.toString(), _cityListManager);
+                  } else if (cityListError != null) {
+                    // If manager initialized but encountered a search/location error later
+                    return _buildErrorFetchingCitiesState(cityListError, _cityListManager);
+                  } else if (selectedCity == null) {
+                    return _buildNoCitySelectedState(context);
+                  } else {
+                    // Main weather display logic, now safely inside an initialized manager context
+                    return StreamBuilder<Map<int, CityWeatherData>>(
+                      stream: _weatherManager.weatherDataStream,
+                      initialData: _weatherManager.getWeatherForCity(selectedCity) != null
+                          ? {selectedCity.hashCode: _weatherManager.getWeatherForCity(selectedCity)!}
+                          : {},
+                      builder: (context, snapshot) {
+                        final CityWeatherData? cityWeatherData = snapshot.data?[selectedCity.hashCode];
+                        final bool isMetric = _unitSystemManager.isMetricUnits;
+
+                        if (cityWeatherData == null || cityWeatherData.liveInfo.isLoading) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const CircularProgressIndicator(color: Colors.white),
+                                const SizedBox(height: 16),
+                                Text(
+                                  cityWeatherData == null
+                                      ? kLoadingCities // Initial load
+                                      : kLoadingWeatherForecast, // Refreshing
+                                  style: const TextStyle(fontSize: 18, color: Colors.white70),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        if (cityWeatherData.liveInfo.error != null) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(20.0),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.cloud_off, color: Colors.white, size: 40),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    '${kWeatherError} ${cityWeatherData.liveInfo.error}',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontSize: 16, color: Colors.white),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  ElevatedButton.icon(
+                                    icon: const Icon(Icons.refresh),
+                                    label: const Text(kRetryFetchCities),
+                                    onPressed: () {
+                                      _weatherManager.fetchWeatherForCities([selectedCity]);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        // Display weather data
+                        return SingleChildScrollView(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Stack( // Ensure Stack is here for Add button positioning
+                                  alignment: Alignment.center,
+                                  children: [
+                                    Column(
+                                      children: [
+                                        _buildCityName(selectedCity.name),
+                                        _buildLocalTime(cityWeatherData.liveInfo.formattedLocalTime),
+                                        const SizedBox(height: 20),
+                                        _buildWeatherStatus(cityWeatherData.liveInfo),
+                                      ],
+                                    ),
+                                    // Original Add button placement
+                                    Positioned(
+                                      top: 0,
+                                      right: 0,
+                                      child: _buildAddCityButton(selectedCity, _cityListManager),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+                                _buildWeatherDetailsText(cityWeatherData.liveInfo),
+                                const SizedBox(height: 20),
+                                _buildWeatherAlerts(cityWeatherData.alerts),
+                                const SizedBox(height: 20),
+                                // Hourly Forecast
+                                if (cityWeatherData.hourlyForecasts.isNotEmpty) ...[
+                                  const Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      kHourlyForecastHeading,
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        shadows: [
+                                          Shadow(
+                                            blurRadius: 5.0,
+                                            color: Colors.black45,
+                                            offset: Offset(1.0, 1.0),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  SizedBox(
+                                    height: 160, // Fixed height for horizontal scroll
+                                    child: ListView.builder(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: cityWeatherData.hourlyForecasts.length,
+                                      itemBuilder: (context, index) {
+                                        return _buildHourlyForecastCardItem(
+                                            cityWeatherData.hourlyForecasts[index], isMetric);
+                                      },
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 20),
+                                // Daily Forecast
+                                if (cityWeatherData.dailyForecasts.isNotEmpty) ...[
+                                  const Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      kDailyForecastHeading,
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        shadows: [
+                                          Shadow(
+                                            blurRadius: 5.0,
+                                            color: Colors.black45,
+                                            offset: Offset(1.0, 1.0),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  // ListView.builder should now display all days correctly without the LayoutBuilder or problematic key
+                                  ListView.builder(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(), // Remains non-scrollable itself
+                                    itemCount: cityWeatherData.dailyForecasts.length,
+                                    itemBuilder: (context, index) {
+                                      return _buildDailyForecastRowItem(
+                                          cityWeatherData.dailyForecasts[index], isMetric);
+                                    },
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  }
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+Color getUvIndexColor(double uvIndex) {
+  if (uvIndex < 3) return Colors.greenAccent;
+  if (uvIndex < 6) return Colors.yellowAccent;
+  if (uvIndex < 8) return Colors.orangeAccent;
+  if (uvIndex < 11) return Colors.redAccent;
+  return Colors.purpleAccent;
+}
+
+Color getSeverityColor(String? severity) {
+  switch (severity?.toLowerCase()) {
+    case 'extreme':
+      return Colors.deepPurpleAccent;
+    case 'severe':
+      return Colors.redAccent;
+    case 'moderate':
+      return Colors.orangeAccent;
+    case 'minor':
+      return Colors.yellowAccent;
+    case 'unknown':
+    default:
+      return Colors.grey;
   }
 }

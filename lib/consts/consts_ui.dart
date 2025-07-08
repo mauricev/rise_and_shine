@@ -17,7 +17,6 @@ const String kOptionsDialogTitle = 'Settings';
 const String kChooseUnitsLabel = 'Choose Units:';
 const String kImperialUnitsLabel = 'Imperial';
 const String kWeatherError = 'Weather Data Error:';
-const String kNotEnoughSpaceForDailyForecast = 'Not enough space for daily forecast';
 
 // City Selection Screen
 const String kCitySelectionScreenTitle = 'Select a City';

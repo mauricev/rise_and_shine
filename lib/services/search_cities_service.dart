@@ -3,29 +3,19 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:rise_and_shine/models/city.dart';
-import 'package:logger/logger.dart';
 import 'package:flutter/foundation.dart';
+
+import '../utils/app_logger.dart';
 
 class SearchCitiesService {
   static const String _baseUrl = 'https://api.opencagedata.com/geocode/v1/json';
   static const String _apiKey = 'c2c0d08e8d8f459b881ebe54afbd838f'; // Replace with your actual OpenCage API Key
 
-  final Logger _logger = Logger(
-    printer: PrettyPrinter(
-      methodCount: 0,
-      errorMethodCount: 5,
-      lineLength: 120,
-      colors: true,
-      printEmojis: true,
-      // FIX: Corrected dateTimeFormat value
-      dateTimeFormat: DateTimeFormat.onlyTime,
-    ),
-  );
 
   Future<List<City>> searchCities(String query) async {
     if (query.isEmpty) {
       if (kDebugMode) {
-        _logger.d('SearchCitiesService: Query is empty, returning empty list.');
+        logger.d('SearchCitiesService: Query is empty, returning empty list.');
       }
       return [];
     }
@@ -33,14 +23,14 @@ class SearchCitiesService {
     final Uri uri = Uri.parse('$_baseUrl?q=$query&key=$_apiKey');
 
     if (kDebugMode) {
-      _logger.d('SearchCitiesService: Fetching cities from: $uri');
+      logger.d('SearchCitiesService: Fetching cities from: $uri');
     }
 
     final http.Response response = await http.get(uri);
 
     //if (kDebugMode) {
-      //_logger.d('SearchCitiesService: Response status code: ${response.statusCode}');
-      //_logger.d('SearchCitiesService: Response body: ${response.body}');
+      //logger.d('SearchCitiesService: Response status code: ${response.statusCode}');
+      //logger.d('SearchCitiesService: Response body: ${response.body}');
     //}
 
     if (response.statusCode == 200) {
@@ -57,24 +47,24 @@ class SearchCitiesService {
         final Map<String, dynamic>? geometry = result['geometry'] as Map<String, dynamic>?;
 
         if (kDebugMode) {
-          _logger.d('--- Processing result: "${result['formatted']}" ---');
-          _logger.d('  Raw _type: ${components?['_type']}');
-          _logger.d('  Raw _category: ${components?['_category']}');
-          _logger.d('  Raw city: ${components?['city']}');
-          _logger.d('  Raw town: ${components?['town']}');
-          _logger.d('  Raw village: ${components?['village']}');
-          _logger.d('  Raw suburb: ${components?['suburb']}');
-          _logger.d('  Raw hamlet: ${components?['hamlet']}');
-          _logger.d('  Raw city_district: ${components?['city_district']}');
-          _logger.d('  Raw borough: ${components?['borough']}');
-          _logger.d('  Raw _normalized_city: ${components?['_normalized_city']}');
-          _logger.d('  Raw geometry.lat: ${geometry?['lat']}');
-          _logger.d('  Raw geometry.lng: ${geometry?['lng']}');
+          logger.d('--- Processing result: "${result['formatted']}" ---');
+          logger.d('  Raw _type: ${components?['_type']}');
+          logger.d('  Raw _category: ${components?['_category']}');
+          logger.d('  Raw city: ${components?['city']}');
+          logger.d('  Raw town: ${components?['town']}');
+          logger.d('  Raw village: ${components?['village']}');
+          logger.d('  Raw suburb: ${components?['suburb']}');
+          logger.d('  Raw hamlet: ${components?['hamlet']}');
+          logger.d('  Raw city_district: ${components?['city_district']}');
+          logger.d('  Raw borough: ${components?['borough']}');
+          logger.d('  Raw _normalized_city: ${components?['_normalized_city']}');
+          logger.d('  Raw geometry.lat: ${geometry?['lat']}');
+          logger.d('  Raw geometry.lng: ${geometry?['lng']}');
         }
 
         if (components == null || geometry == null) {
           if (kDebugMode) {
-            _logger.d('SearchCitiesService: Skipping result "${result['formatted']}" because components or geometry map is missing.');
+            logger.d('SearchCitiesService: Skipping result "${result['formatted']}" because components or geometry map is missing.');
           }
           continue;
         }
@@ -90,7 +80,7 @@ class SearchCitiesService {
           longitude = rawLng.toDouble();
         } else {
           if (kDebugMode) {
-            _logger.d('SearchCitiesService: Skipping result "${result['formatted']}" because lat (${rawLat.runtimeType}) or lng (${rawLng.runtimeType}) is not a number. Raw values: lat=$rawLat, lng=$rawLng');
+            logger.d('SearchCitiesService: Skipping result "${result['formatted']}" because lat (${rawLat.runtimeType}) or lng (${rawLng.runtimeType}) is not a number. Raw values: lat=$rawLat, lng=$rawLng');
           }
           continue;
         }
@@ -102,7 +92,7 @@ class SearchCitiesService {
 
         if (type == null || !acceptedTypes.contains(type)) {
           if (kDebugMode) {
-            _logger.d('SearchCitiesService: Skipping result "${result['formatted']}" because _type is "$type" (not in accepted list: ${acceptedTypes.join(', ')}).');
+            logger.d('SearchCitiesService: Skipping result "${result['formatted']}" because _type is "$type" (not in accepted list: ${acceptedTypes.join(', ')}).');
           }
           continue;
         }
@@ -119,7 +109,7 @@ class SearchCitiesService {
 
         if (!nameMatchesQuery) {
           if (kDebugMode) {
-            _logger.d('SearchCitiesService: Skipping result "${result['formatted']}" because its determined display name ("$displayNameCandidate") and normalized city ("${components['_normalized_city']}") do not contain the query "$query".');
+            logger.d('SearchCitiesService: Skipping result "${result['formatted']}" because its determined display name ("$displayNameCandidate") and normalized city ("${components['_normalized_city']}") do not contain the query "$query".');
           }
           continue;
         }
@@ -141,9 +131,9 @@ class SearchCitiesService {
         );
       }
       if (kDebugMode) {
-        _logger.d('SearchCitiesService: Found ${cities.length} filtered cities.');
+        logger.d('SearchCitiesService: Found ${cities.length} filtered cities.');
         for (var city in cities) {
-          _logger.d('  - Added city: ${city.name}, ${city.country} (Lat: ${city.latitude}, Lon: ${city.longitude})');
+          logger.d('  - Added city: ${city.name}, ${city.country} (Lat: ${city.latitude}, Lon: ${city.longitude})');
         }
       }
       return cities;
@@ -151,7 +141,7 @@ class SearchCitiesService {
       final Map<String, dynamic> errorData = jsonDecode(response.body) as Map<String, dynamic>;
       final String errorMessage = errorData['message'] as String? ?? 'Unknown error';
       if (kDebugMode) {
-        _logger.e('SearchCitiesService: Error response: ${response.statusCode}, Message: $errorMessage', error: errorData);
+        logger.e('SearchCitiesService: Error response: ${response.statusCode}, Message: $errorMessage', error: errorData);
       }
       throw Exception('Failed to search for cities: $errorMessage (Status: ${response.statusCode})');
     }

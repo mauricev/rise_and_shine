@@ -4,9 +4,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:rise_and_shine/models/city.dart';
 import 'package:rise_and_shine/services/open_weather_service.dart';
-import 'package:logger/logger.dart';
 import 'package:geolocator/geolocator.dart'; // Mobile-specific import
-import 'package:flutter/foundation.dart'; // NEW: Import for defaultTargetPlatform
+import 'package:flutter/foundation.dart';
+
+import '../utils/app_logger.dart'; // NEW: Import for defaultTargetPlatform
 
 // The actual LocationService implementation for mobile
 class LocationService {
@@ -14,23 +15,12 @@ class LocationService {
 
   final OpenWeatherService _openWeatherService;
 
-  final Logger _logger = Logger(
-    printer: PrettyPrinter(
-      methodCount: 0,
-      errorMethodCount: 5,
-      lineLength: 120,
-      colors: true,
-      printEmojis: true,
-      // FIX: Corrected dateTimeFormat value
-      dateTimeFormat: DateTimeFormat.onlyTime,
-    ),
-  );
 
   LocationService({required OpenWeatherService openWeatherService})
       : _openWeatherService = openWeatherService;
 
   Future<City?> getCurrentCityLocation() async {
-    _logger.d('LocationService (Mobile): Attempting to get current city location.');
+    logger.d('LocationService (Mobile): Attempting to get current city location.');
 
     City? detectedCity;
 
@@ -38,7 +28,7 @@ class LocationService {
 
     // Fallback to IP lookup if precise location/reverse geocoding failed
     if (detectedCity == null) {
-      _logger.d('LocationService (Mobile): Precise geolocation/reverse geocoding failed. Falling back to IP lookup.');
+      logger.d('LocationService (Mobile): Precise geolocation/reverse geocoding failed. Falling back to IP lookup.');
       detectedCity = await _getCityFromIpLookup();
     }
 
@@ -47,13 +37,13 @@ class LocationService {
 
   // --- Mobile Implementation (Geolocator) ---
   Future<City?> _getCurrentCityLocationMobile() async {
-    _logger.d('LocationService (Mobile): Attempting mobile geolocation...');
+    logger.d('LocationService (Mobile): Attempting mobile geolocation...');
     bool serviceEnabled;
     LocationPermission permission;
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      _logger.e('LocationService (Mobile): Location services are disabled.');
+      logger.e('LocationService (Mobile): Location services are disabled.');
       return null;
     }
 
@@ -61,13 +51,13 @@ class LocationService {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        _logger.e('LocationService (Mobile): Location permissions are denied by user.');
+        logger.e('LocationService (Mobile): Location permissions are denied by user.');
         return null;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      _logger.e('LocationService (Mobile): Location permissions are permanently denied, cannot request.');
+      logger.e('LocationService (Mobile): Location permissions are permanently denied, cannot request.');
       return null;
     }
 
@@ -97,19 +87,19 @@ class LocationService {
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: locationSettings,
       );
-      _logger.d('LocationService (Mobile): Mobile geolocation successful: ${position.latitude}, ${position.longitude}');
+      logger.d('LocationService (Mobile): Mobile geolocation successful: ${position.latitude}, ${position.longitude}');
 
       // Use OpenWeatherService to reverse geocode these precise coordinates
       return await _openWeatherService.reverseGeocode(position.latitude, position.longitude);
     } catch (e) {
-      _logger.e('LocationService (Mobile): Error getting mobile location: $e. Will try IP lookup as fallback.', error: e);
+      logger.e('LocationService (Mobile): Error getting mobile location: $e. Will try IP lookup as fallback.', error: e);
       return null;
     }
   }
 
   // --- Fallback Implementation (IP Lookup) ---
   Future<City?> _getCityFromIpLookup() async {
-    _logger.d('LocationService (Mobile): Performing IP lookup for city details...');
+    logger.d('LocationService (Mobile): Performing IP lookup for city details...');
     try {
       final http.Response response = await http.get(Uri.parse(_ipApiUrl));
       if (response.statusCode == 200) {
@@ -123,7 +113,7 @@ class LocationService {
         final int? utcOffsetSeconds = _parseUtcOffset(data['utc_offset'] as String?);
 
         if (city != null && country != null && latitude != null && longitude != null && utcOffsetSeconds != null) {
-          _logger.d('LocationService (Mobile): IP lookup successful: $city, $country');
+          logger.d('LocationService (Mobile): IP lookup successful: $city, $country');
           return City(
             name: city,
             country: country,
@@ -133,15 +123,15 @@ class LocationService {
             timezoneOffsetSeconds: utcOffsetSeconds,
           );
         } else {
-          _logger.e('LocationService (Mobile): IP lookup data incomplete or missing required fields: $data');
+          logger.e('LocationService (Mobile): IP lookup data incomplete or missing required fields: $data');
           return null;
         }
       } else {
-        _logger.e('LocationService (Mobile): IP lookup failed with status: ${response.statusCode}, body: ${response.body}');
+        logger.e('LocationService (Mobile): IP lookup failed with status: ${response.statusCode}, body: ${response.body}');
         return null;
       }
     } catch (e) {
-      _logger.e('LocationService (Mobile): Error during IP lookup: $e', error: e);
+      logger.e('LocationService (Mobile): Error during IP lookup: $e', error: e);
       return null;
     }
   }
@@ -155,7 +145,7 @@ class LocationService {
       final int minutes = int.parse(utcOffset.substring(3, 5));
       return sign * (hours * 3600 + minutes * 60);
     } catch (e) {
-      _logger.e('LocationService (Mobile): Error parsing UTC offset: $utcOffset, error: $e');
+      logger.e('LocationService (Mobile): Error parsing UTC offset: $utcOffset, error: $e');
       return null;
     }
   }
