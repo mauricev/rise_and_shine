@@ -289,6 +289,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
     String tempUnit = isMetric ? 'C' : 'F';
     String speedUnit = isMetric ? 'm/s' : 'mph';
 
+    // Define a standard height for a single line of dynamic text (PoP or Wind)
+    // This helps in reserving consistent space.
+    const double dynamicTextLineHeight = 16.0;
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       elevation: 4,
@@ -296,24 +300,50 @@ class _WeatherScreenState extends State<WeatherScreen> {
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          mainAxisAlignment: MainAxisAlignment.center, // Center content vertically within the card
           children: [
+            // 1. Time (closer to the top)
             Text(DateFormat('h a').format(forecast.time.toLocal()), style: const TextStyle(fontSize: 14)),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2), // Small space after time
+
+            // 2. Condition Icon
             Text(getWeatherEmoji(forecast.iconCode), style: const TextStyle(fontSize: 32)),
+
+            // 3. Fixed-height section for PoP and Wind (ensures vertical alignment)
+            SizedBox(
+              height: 2 * dynamicTextLineHeight, // Space for two potential lines
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center, // Center PoP/Wind vertically within this block
+                children: [
+                  // Rain Probability (PoP) - Row 2 if present
+                  if (forecast.pop != null && forecast.pop! > 0)
+                    Text(
+                      '${(forecast.pop! * 100).toStringAsFixed(0)}% Pop',
+                      style: const TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center, // Ensure text is centered
+                    )
+                  else
+                    const SizedBox(height: dynamicTextLineHeight), // Reserve space if not present
+
+                  // Wind Speed - Row 2 or 3 if present
+                  if (forecast.windSpeed != null && forecast.windSpeed! >= _weatherManager.getWindSpeedThreshold())
+                    Text(
+                      '${forecast.windSpeed!.toStringAsFixed(0)} $speedUnit',
+                      style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center, // Ensure text is centered
+                    )
+                  else
+                    const SizedBox(height: dynamicTextLineHeight), // Reserve space if not present
+                ],
+              ),
+            ),
+
+            // Space between dynamic block and temperature
             const SizedBox(height: 4),
+
+            // 4. Temperature (always at the same vertical position across all cards)
             Text('${forecast.temperatureCelsius.toStringAsFixed(0)}°$tempUnit',
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            if (forecast.pop != null && forecast.pop! > 0) ...[
-              const SizedBox(height: 4),
-              Text('${(forecast.pop! * 100).toStringAsFixed(0)}% Pop',
-                  style: const TextStyle(fontSize: 12, color: Colors.blue)),
-            ],
-            if (forecast.windSpeed != null && forecast.windSpeed! >= _weatherManager.getWindSpeedThreshold()) ...[
-              const SizedBox(height: 4),
-              Text('${forecast.windSpeed!.toStringAsFixed(0)} $speedUnit',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            ],
           ],
         ),
       ),
@@ -801,7 +831,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                                         ),
                                         const SizedBox(height: 10),
                                         SizedBox(
-                                          height: 160, // Fixed height for horizontal scroll
+                                          height: 175, // Increased height from 160 to 175
                                           child: ListView.builder(
                                             scrollDirection: Axis.horizontal,
                                             itemCount: cityWeatherData.hourlyForecasts.length,
