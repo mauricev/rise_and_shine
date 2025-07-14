@@ -51,17 +51,17 @@ class CityListManager extends ChangeNotifier {
     _isSearchingCities = false;
     _searchCitiesError = null;
 
-    if (kDebugMode) {
-      logger.d('CityListManager: _initializeManager started.');
-    }
+    //if (kDebugMode) {
+    //  logger.d('CityListManager: _initializeManager started.');
+   // }
 
     try {
       if (!Hive.isBoxOpen(_citiesBoxName)) {
         _citiesBox = await Hive.openBox(_citiesBoxName);
-        logger.d('CityListManager: Hive box "$_citiesBoxName" opened.');
+        //logger.d('CityListManager: Hive box "$_citiesBoxName" opened.');
       } else {
         _citiesBox = Hive.box(_citiesBoxName);
-        logger.d('CityListManager: Hive box "$_citiesBoxName" already open.');
+        //logger.d('CityListManager: Hive box "$_citiesBoxName" already open.');
       }
 
       _loadCitiesFromHive();
@@ -69,11 +69,11 @@ class CityListManager extends ChangeNotifier {
       City? currentLocationCity;
       try {
         currentLocationCity = await _locationService.getCurrentCityLocation();
-        if (currentLocationCity != null) {
-          logger.d('CityListManager: Detected current location: ${currentLocationCity.name}, ${currentLocationCity.country}');
-        } else {
-          logger.d('CityListManager: Could not detect current location via LocationService.');
-        }
+        //if (currentLocationCity != null) {
+         // logger.d('CityListManager: Detected current location: ${currentLocationCity.name}, ${currentLocationCity.country}');
+        //} else {
+        //  logger.d('CityListManager: Could not detect current location via LocationService.');
+        //}
       } catch (e) {
         logger.e('CityListManager: Error getting current location from LocationService: $e', error: e);
         currentLocationCity = null;
@@ -86,12 +86,12 @@ class CityListManager extends ChangeNotifier {
         );
         _citiesData.insert(0, newCityDisplayData);
         _selectedCity = currentLocationCity;
-        logger.d('CityListManager: Added current location as selected city: ${currentLocationCity.name}.');
+        //logger.d('CityListManager: Added current location as selected city: ${currentLocationCity.name}.');
       } else if (currentLocationCity != null) {
         final existingData = _citiesData.firstWhereOrNull((data) => data.city == currentLocationCity);
         if (existingData != null) {
           _selectedCity = existingData.city;
-          logger.d('CityListManager: Current location ${currentLocationCity.name} already in list, setting as selected.');
+          //logger.d('CityListManager: Current location ${currentLocationCity.name} already in list, setting as selected.');
         }
       }
 
@@ -102,12 +102,12 @@ class CityListManager extends ChangeNotifier {
         logger.d('CityListManager: No saved cities and no current location detected. App starts with no city selected.');
       }
 
-      if (kDebugMode) {
-        logger.d('CityListManager: Final _citiesData after initialization: ${_citiesData.length} cities.');
-        for (var data in _citiesData) {
-          logger.d('  - Final list: ${data.city.name} (Saved: ${data.isSaved}, Selected: ${data.city == _selectedCity})');
-        }
-      }
+      //if (kDebugMode) {
+     //   logger.d('CityListManager: Final _citiesData after initialization: ${_citiesData.length} cities.');
+      //  for (var data in _citiesData) {
+      //    logger.d('  - Final list: ${data.city.name} (Saved: ${data.isSaved}, Selected: ${data.city == _selectedCity})');
+      //  }
+      //}
 
       _initCompleter.complete();
       notifyListeners();
@@ -123,7 +123,7 @@ class CityListManager extends ChangeNotifier {
   void _loadCitiesFromHive() {
     final List<dynamic>? savedJsonList = _citiesBox.get('savedCities');
     if (savedJsonList != null) {
-      logger.d('CityListManager: Found ${savedJsonList.length} cities in Hive.');
+      //logger.d('CityListManager: Found ${savedJsonList.length} cities in Hive.');
       for (final dynamic jsonItem in savedJsonList) {
         try {
           final Map<String, dynamic> cityMap = Map<String, dynamic>.from(jsonItem);
@@ -133,10 +133,11 @@ class CityListManager extends ChangeNotifier {
           logger.e('CityListManager: Error parsing saved city from Hive: $e, data: $jsonItem', error: e);
         }
       }
-    } else {
-      logger.d('CityListManager: No saved cities found in Hive.');
     }
-    logger.d('CityListManager: After _loadCitiesFromHive, final _citiesData count: ${_citiesData.length}');
+    //else {
+    //  logger.d('CityListManager: No saved cities found in Hive.');
+    //}
+    //logger.d('CityListManager: After _loadCitiesFromHive, final _citiesData count: ${_citiesData.length}');
   }
 
   Future<void> _saveCitiesToHive() async {

@@ -18,7 +18,7 @@ Future<void> main() async {
   try {
     final appDocumentDir = await getApplicationDocumentsDirectory();
     await Hive.initFlutter(appDocumentDir.path);
-    logger.d('Hive initialized at: ${appDocumentDir.path}'); // Use global logger
+    //logger.d('Hive initialized at: ${appDocumentDir.path}'); // Use global logger
 
     // REMOVED: await Hive.deleteBoxFromDisk('savedCitiesBox'); // This temporary line is now removed.
     // _logger.d('Hive box "savedCitiesBox" cleared for debugging.'); // This log is also removed.

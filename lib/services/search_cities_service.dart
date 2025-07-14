@@ -5,11 +5,12 @@ import 'package:http/http.dart' as http;
 import 'package:rise_and_shine/models/city.dart';
 import 'package:flutter/foundation.dart';
 
+import '../api_keys/api_keys.dart';
 import '../utils/app_logger.dart';
 
 class SearchCitiesService {
   static const String _baseUrl = 'https://api.opencagedata.com/geocode/v1/json';
-  static const String _apiKey = 'c2c0d08e8d8f459b881ebe54afbd838f'; // Replace with your actual OpenCage API Key
+
 
 
   Future<List<City>> searchCities(String query) async {
@@ -20,7 +21,7 @@ class SearchCitiesService {
       return [];
     }
 
-    final Uri uri = Uri.parse('$_baseUrl?q=$query&key=$_apiKey');
+    final Uri uri = Uri.parse('$_baseUrl?q=$query&key=${ApiKeys.openCageKey}');
 
     if (kDebugMode) {
       logger.d('SearchCitiesService: Fetching cities from: $uri');

@@ -60,7 +60,7 @@ class _AppManagersProviderState extends State<AppManagersProvider> {
   @override
   void initState() {
     super.initState();
-    logger.d('AppManagersProviderState: Initializing managers...');
+    //logger.d('AppManagersProviderState: Initializing managers...');
 
     _openWeatherService = OpenWeatherService();
     _searchCitiesService = SearchCitiesService();
@@ -78,13 +78,13 @@ class _AppManagersProviderState extends State<AppManagersProvider> {
 
     // Chain initializations to ensure dependencies are ready
     _unitSystemManager.initialized.then((_) {
-      logger.d('AppManagersProviderState: UnitSystemManager initialized.');
+      //logger.d('AppManagersProviderState: UnitSystemManager initialized.');
       return _cityListManager.initialized; // Return future to chain
     }).then((_) {
-      logger.d('AppManagersProviderState: CityListManager initialized.');
+      //logger.d('AppManagersProviderState: CityListManager initialized.');
       // After CityListManager is ready, tell WeatherManager to fetch for initial cities
       _weatherManager.fetchWeatherForCities(_cityListManager.allCities).then((_) {
-        logger.d('AppManagersProviderState: Initial weather fetched for all cities.');
+        //logger.d('AppManagersProviderState: Initial weather fetched for all cities.');
       }).catchError((e) {
         logger.e('AppManagersProviderState: Error fetching initial weather: $e');
       });
@@ -123,5 +123,3 @@ class _AppManagersProviderState extends State<AppManagersProvider> {
     );
   }
 }
-
-// REMOVED: AppManagersContext extension // FIX: Removed as per instruction

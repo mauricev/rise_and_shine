@@ -26,14 +26,14 @@ class UnitSystemManager extends ChangeNotifier {
     try {
       if (!Hive.isBoxOpen(_unitBoxName)) {
         _unitBox = await Hive.openBox(_unitBoxName);
-        logger.d('UnitSystemManager: Hive box "$_unitBoxName" opened.');
+        //logger.d('UnitSystemManager: Hive box "$_unitBoxName" opened.');
       } else {
         _unitBox = Hive.box(_unitBoxName);
-        logger.d('UnitSystemManager: Hive box "$_unitBoxName" already open.');
+        //logger.d('UnitSystemManager: Hive box "$_unitBoxName" already open.');
       }
 
       _isMetricUnits = _unitBox.get(_isMetricKey, defaultValue: false) as bool;
-      logger.d('UnitSystemManager: Initial unit system loaded: ${_isMetricUnits ? "Metric" : "English"}');
+      //logger.d('UnitSystemManager: Initial unit system loaded: ${_isMetricUnits ? "Metric" : "English"}');
       _initCompleter.complete();
     } catch (e) {
       logger.e('UnitSystemManager: Error initializing Hive or loading unit preference: $e', error: e);

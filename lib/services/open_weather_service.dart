@@ -9,8 +9,10 @@ import 'package:rise_and_shine/models/weather_alert.dart'; // NEW: Import Weathe
 import 'package:rise_and_shine/utils/app_logger.dart';
 import 'package:flutter/foundation.dart';
 
+import '../api_keys/api_keys.dart';
+
 class OpenWeatherService {
-  static const String _apiKey = '4a2b73e379f5b7f36dd6e51e291e987e';
+
   static const String _oneCallBaseUrl = 'https://api.openweathermap.org/data/3.0/onecall';
   static const String _geocodingBaseUrl = 'https://api.openweathermap.org/geo/1.0/reverse';
 
@@ -19,7 +21,7 @@ class OpenWeatherService {
     // MODIFIED: Added 'alerts' to the exclude parameter to ensure we explicitly request them
     // (though OpenWeatherMap's docs imply they are included if present, being explicit is safer)
     final Uri uri = Uri.parse(
-        '$_oneCallBaseUrl?lat=${city.latitude}&lon=${city.longitude}&exclude=minutely&appid=$_apiKey&units=metric');
+        '$_oneCallBaseUrl?lat=${city.latitude}&lon=${city.longitude}&exclude=minutely&appid=${ApiKeys.openWeatherMapKey}&units=metric');
 
     final http.Response response = await http.get(uri);
 
@@ -64,14 +66,15 @@ class OpenWeatherService {
         if (data['alerts'] != null) {
           final List<dynamic> alertsDataList = data['alerts'] as List<dynamic>;
           alerts = alertsDataList.map((alertJson) => WeatherAlert.fromJson(Map<String, dynamic>.from(alertJson))).toList();
-          if (kDebugMode) {
-            logger.d('OpenWeatherService: Parsed ${alerts.length} weather alerts.');
-          }
-        } else {
-          if (kDebugMode) {
-            logger.d('OpenWeatherService: No weather alerts found in API response.');
-          }
+          //if (kDebugMode) {
+          //  logger.d('OpenWeatherService: Parsed ${alerts.length} weather alerts.');
+          //}
         }
+        //else {
+         // if (kDebugMode) {
+        //    logger.d('OpenWeatherService: No weather alerts found in API response.');
+         // }
+        //}
 
 
         final Map<String, dynamic> parsedData = {
@@ -111,11 +114,11 @@ class OpenWeatherService {
 
   Future<City?> reverseGeocode(double latitude, double longitude) async {
     final Uri uri = Uri.parse(
-        '$_geocodingBaseUrl?lat=$latitude&lon=$longitude&limit=1&appid=$_apiKey');
+        '$_geocodingBaseUrl?lat=$latitude&lon=$longitude&limit=1&appid=${ApiKeys.openWeatherMapKey}');
 
-    if (kDebugMode) {
-      logger.d('OpenWeatherService: Reverse geocoding from: $uri');
-    }
+    //if (kDebugMode) {
+    //  logger.d('OpenWeatherService: Reverse geocoding from: $uri');
+    //}
 
     final http.Response response = await http.get(uri);
 
@@ -133,7 +136,7 @@ class OpenWeatherService {
         final String? state = cityData['state'] as String?;
 
         final Uri timezoneUri = Uri.parse(
-            '$_oneCallBaseUrl?lat=$latitude&lon=$longitude&exclude=current,minutely,hourly,daily,alerts&appid=$_apiKey');
+            '$_oneCallBaseUrl?lat=$latitude&lon=$longitude&exclude=current,minutely,hourly,daily,alerts&appid=${ApiKeys.openWeatherMapKey}');
         final http.Response timezoneResponse = await http.get(timezoneUri);
 
         if (timezoneResponse.statusCode == 200) {

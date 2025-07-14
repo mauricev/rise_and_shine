@@ -20,7 +20,7 @@ class LocationService {
       : _openWeatherService = openWeatherService;
 
   Future<City?> getCurrentCityLocation() async {
-    logger.d('LocationService (Mobile): Attempting to get current city location.');
+    //logger.d('LocationService (Mobile): Attempting to get current city location.');
 
     City? detectedCity;
 
@@ -28,7 +28,7 @@ class LocationService {
 
     // Fallback to IP lookup if precise location/reverse geocoding failed
     if (detectedCity == null) {
-      logger.d('LocationService (Mobile): Precise geolocation/reverse geocoding failed. Falling back to IP lookup.');
+      //logger.d('LocationService (Mobile): Precise geolocation/reverse geocoding failed. Falling back to IP lookup.');
       detectedCity = await _getCityFromIpLookup();
     }
 
@@ -37,13 +37,13 @@ class LocationService {
 
   // --- Mobile Implementation (Geolocator) ---
   Future<City?> _getCurrentCityLocationMobile() async {
-    logger.d('LocationService (Mobile): Attempting mobile geolocation...');
+    //logger.d('LocationService (Mobile): Attempting mobile geolocation...');
     bool serviceEnabled;
     LocationPermission permission;
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      logger.e('LocationService (Mobile): Location services are disabled.');
+      //logger.e('LocationService (Mobile): Location services are disabled.');
       return null;
     }
 
@@ -51,13 +51,13 @@ class LocationService {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        logger.e('LocationService (Mobile): Location permissions are denied by user.');
+        //logger.e('LocationService (Mobile): Location permissions are denied by user.');
         return null;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      logger.e('LocationService (Mobile): Location permissions are permanently denied, cannot request.');
+      //logger.e('LocationService (Mobile): Location permissions are permanently denied, cannot request.');
       return null;
     }
 
@@ -87,7 +87,7 @@ class LocationService {
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: locationSettings,
       );
-      logger.d('LocationService (Mobile): Mobile geolocation successful: ${position.latitude}, ${position.longitude}');
+      //logger.d('LocationService (Mobile): Mobile geolocation successful: ${position.latitude}, ${position.longitude}');
 
       // Use OpenWeatherService to reverse geocode these precise coordinates
       return await _openWeatherService.reverseGeocode(position.latitude, position.longitude);
@@ -99,7 +99,7 @@ class LocationService {
 
   // --- Fallback Implementation (IP Lookup) ---
   Future<City?> _getCityFromIpLookup() async {
-    logger.d('LocationService (Mobile): Performing IP lookup for city details...');
+    //logger.d('LocationService (Mobile): Performing IP lookup for city details...');
     try {
       final http.Response response = await http.get(Uri.parse(_ipApiUrl));
       if (response.statusCode == 200) {
@@ -113,7 +113,7 @@ class LocationService {
         final int? utcOffsetSeconds = _parseUtcOffset(data['utc_offset'] as String?);
 
         if (city != null && country != null && latitude != null && longitude != null && utcOffsetSeconds != null) {
-          logger.d('LocationService (Mobile): IP lookup successful: $city, $country');
+          //logger.d('LocationService (Mobile): IP lookup successful: $city, $country');
           return City(
             name: city,
             country: country,
