@@ -11,8 +11,6 @@ import '../utils/app_logger.dart';
 class SearchCitiesService {
   static const String _baseUrl = 'https://api.opencagedata.com/geocode/v1/json';
 
-
-
   Future<List<City>> searchCities(String query) async {
     if (query.isEmpty) {
       if (kDebugMode) {
